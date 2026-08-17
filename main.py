@@ -43,7 +43,7 @@ def get_users(
     return users[:limit]
 
 @app.get("/users/{user_id}", response_model=UserResponse)
-def get_users(user_id: int):
+def get_user(user_id: int):
     for user in users:
         if user["id"] == user_id:
             return user
@@ -56,7 +56,8 @@ def get_users(user_id: int):
 @app.post(
         "/users",
         response_model=UserResponse,
-        status_code=status.HTTP_201_CREATED)
+        status_code=status.HTTP_201_CREATED
+)
 def create_user(user: UserCreate):
     new_user = {
         "id": len(users) + 1,
