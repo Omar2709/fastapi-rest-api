@@ -2,11 +2,13 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Identity,
     String,
     func,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,4 +46,10 @@ class User(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=true(),
     )
