@@ -9,6 +9,8 @@ from app.schemas import UserCreate, UserUpdate
 class DuplicateEmailError(Exception):
     pass
 
+class UserHasTasksError(Exception):
+    pass
 
 def get_users(
     db: Session,
@@ -101,4 +103,20 @@ def delete_user(
     user: User,
 ) -> None:
     db.delete(user)
-    db.commit()
+
+    try:
+        db.commit()
+
+    except IntegrityError as exc:
+        db.rollback()
+
+        sqlstate = getattr(
+            exc.orig,
+            "sqlstate",
+            None,
+        )
+
+        if sqlstate in {"23001", "23503"}:
+            raise UserHasTasksError from exc
+
+        raise

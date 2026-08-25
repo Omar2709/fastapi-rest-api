@@ -80,3 +80,38 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+class TaskCreate(BaseModel):
+    title: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+    description: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError(
+                "El título no puede estar vacío"
+            )
+
+        return value
+
+
+class TaskResponse(BaseModel):
+    id: int
+    title: str
+    description: str | None
+    is_completed: bool
+    created_at: datetime
+    user_id: int
+
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
