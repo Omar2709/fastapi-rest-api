@@ -1,6 +1,24 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+
+def normalize_name(value: str) -> str:
+    value = value.strip()
+
+    if len(value) < 2:
+        raise ValueError(
+            "El nombre debe tener al menos 2 caracteres"
+        )
+
+    return value
 
 
 class UserCreate(BaseModel):
@@ -8,8 +26,48 @@ class UserCreate(BaseModel):
         min_length=2,
         max_length=50,
     )
-
     email: EmailStr
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return normalize_name(value)
+
+
+class UserUpdate(BaseModel):
+    name: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=50,
+    )
+    email: EmailStr | None = None
+    is_active: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        return normalize_name(value)
+
+    @model_validator(mode="after")
+    def validate_update(self):
+        if not self.model_fields_set:
+            raise ValueError(
+                "Debes enviar al menos un campo para actualizar"
+            )
+
+        for field_name in self.model_fields_set:
+            if getattr(self, field_name) is None:
+                raise ValueError(
+                    f"{field_name} no puede ser null"
+                )
+
+        return self
 
 
 class UserResponse(BaseModel):
