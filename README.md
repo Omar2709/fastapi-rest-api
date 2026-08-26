@@ -2,7 +2,7 @@
 
 API REST construida desde cero con Python como proyecto de aprendizaje de desarrollo backend.
 
-El objetivo principal de este proyecto no es solamente crear una API funcional, sino comprender cómo encaja cada pieza del backend: HTTP, validación de datos, acceso a base de datos, ORM, migraciones, relaciones entre tablas, manejo de errores y control de versiones.
+El objetivo principal de este proyecto no es solamente crear una API funcional, sino comprender cómo encaja cada pieza del backend: HTTP, validación de datos, acceso a base de datos, ORM, migraciones, relaciones entre tablas, manejo de errores, gestión de dependencias y control de versiones.
 
 > Este proyecto está en desarrollo y este README se actualizará a medida que se incorporen nuevas funcionalidades y conceptos.
 
@@ -12,39 +12,42 @@ El objetivo principal de este proyecto no es solamente crear una API funcional, 
 
 Este proyecto busca aprender de forma práctica:
 
-- Cómo funciona una API REST.
-- Métodos HTTP: `GET`, `POST`, `PATCH` y `DELETE`.
-- Códigos de estado HTTP como `200`, `201`, `204`, `404` y `409`.
-- Path parameters, query parameters y request bodies.
-- Validación de datos con Pydantic.
-- Separación entre modelos de entrada, salida y persistencia.
-- Persistencia de datos con PostgreSQL.
-- Uso de SQL y conceptos relacionales.
-- ORM con SQLAlchemy 2.x.
-- Gestión de sesiones y transacciones.
-- Migraciones de base de datos con Alembic.
-- Relaciones `1:N` y claves foráneas.
-- Manejo de errores de integridad.
-- Arquitectura por capas.
-- Control de versiones con Git y GitHub.
+* Cómo funciona una API REST.
+* Métodos HTTP: `GET`, `POST`, `PATCH` y `DELETE`.
+* Códigos de estado HTTP como `200`, `201`, `204`, `404`, `409` y `422`.
+* Path parameters, query parameters y request bodies.
+* Validación de datos con Pydantic.
+* Separación entre modelos de entrada, salida y persistencia.
+* Persistencia de datos con PostgreSQL.
+* Uso de SQL y conceptos relacionales.
+* ORM con SQLAlchemy 2.x.
+* Gestión de sesiones y transacciones.
+* Migraciones de base de datos con Alembic.
+* Relaciones `1:N` y claves foráneas.
+* Manejo de errores de integridad.
+* Arquitectura por capas.
+* Gestión de dependencias y entornos con `uv`.
+* Uso de `pyproject.toml` y `uv.lock`.
+* Control de versiones con Git y GitHub.
 
 ---
 
 ## Tecnologías
 
-| Tecnología | Uso |
-| --- | --- |
-| Python | Lenguaje principal |
-| FastAPI | Framework para construir la API |
-| Pydantic | Validación y serialización de datos |
-| Pydantic Settings | Configuración mediante variables de entorno |
-| SQLAlchemy 2.x | ORM y acceso a la base de datos |
-| Psycopg 3 | Driver de PostgreSQL para Python |
-| PostgreSQL | Base de datos relacional |
-| Alembic | Migraciones y versionado del esquema |
-| Uvicorn | Servidor ASGI |
-| Git | Control de versiones |
-| GitHub | Repositorio remoto |
+| Tecnología        | Uso                                                 |
+| ----------------- | --------------------------------------------------- |
+| Python            | Lenguaje principal                                  |
+| FastAPI           | Framework para construir la API                     |
+| Pydantic          | Validación y serialización de datos                 |
+| Pydantic Settings | Configuración mediante variables de entorno         |
+| SQLAlchemy 2.x    | ORM y acceso a la base de datos                     |
+| Psycopg 3         | Driver de PostgreSQL para Python                    |
+| PostgreSQL        | Base de datos relacional                            |
+| Alembic           | Migraciones y versionado del esquema                |
+| Uvicorn           | Servidor ASGI                                       |
+| uv                | Gestión de dependencias, entorno virtual y lockfile |
+| Git               | Control de versiones                                |
+| GitHub            | Repositorio remoto                                  |
 
 ---
 
@@ -109,7 +112,7 @@ Actualmente el proyecto tiene una estructura similar a:
 
 ```text
 fastapi-rest-api/
-|
+│
 ├── app/
 │   ├── __init__.py
 │   ├── main.py
@@ -140,11 +143,28 @@ fastapi-rest-api/
 ├── .env.example
 ├── .gitignore
 ├── alembic.ini
-├── README.md
-└── requirements.txt
+├── pyproject.toml
+├── uv.lock
+└── README.md
 ```
 
 > `.env` contiene configuración local sensible y no debe subirse al repositorio.
+
+### Gestión de dependencias
+
+Las dependencias directas del proyecto se declaran en:
+
+```text
+pyproject.toml
+```
+
+Las versiones exactas resueltas, incluyendo dependencias transitivas, quedan registradas en:
+
+```text
+uv.lock
+```
+
+`uv.lock` forma parte del código fuente del proyecto y debe versionarse con Git.
 
 ---
 
@@ -178,12 +198,12 @@ is_active
 
 Características importantes:
 
-- `id` es la clave primaria.
-- PostgreSQL genera automáticamente el `id`.
-- `email` es obligatorio y único.
-- `name` tiene restricciones de longitud.
-- `is_active` permite desactivar usuarios sin eliminarlos físicamente.
-- `created_at` se genera automáticamente.
+* `id` es la clave primaria.
+* PostgreSQL genera automáticamente el `id`.
+* `email` es obligatorio y único.
+* `name` tiene restricciones de longitud.
+* `is_active` permite desactivar usuarios sin eliminarlos físicamente.
+* `created_at` se genera automáticamente.
 
 ### `tasks`
 
@@ -200,12 +220,13 @@ user_id
 
 Características importantes:
 
-- `id` es la clave primaria.
-- `user_id` es una clave foránea hacia `users.id`.
-- `user_id` tiene un índice para acelerar consultas por usuario.
-- Una tarea no puede existir sin usuario.
-- `is_completed` comienza en `false`.
-- La relación utiliza `ON DELETE RESTRICT`.
+* `id` es la clave primaria.
+* `user_id` es una clave foránea hacia `users.id`.
+* `user_id` tiene un índice para acelerar consultas por usuario.
+* Una tarea no puede existir sin usuario.
+* `is_completed` comienza en `false`.
+* `description` puede ser `NULL`.
+* La relación utiliza `ON DELETE RESTRICT`.
 
 Esto significa que PostgreSQL impide eliminar un usuario mientras tenga tareas asociadas.
 
@@ -215,24 +236,24 @@ Esto significa que PostgreSQL impide eliminar un usuario mientras tenga tareas a
 
 ### General
 
-| Método | Endpoint | Descripción |
-| --- | --- | --- |
-| `GET` | `/` | Mensaje principal |
-| `GET` | `/health` | Comprobación básica del estado de la API |
+| Método | Endpoint  | Descripción                              |
+| ------ | --------- | ---------------------------------------- |
+| `GET`  | `/`       | Mensaje principal                        |
+| `GET`  | `/health` | Comprobación básica del estado de la API |
 
 ### Users
 
-| Método | Endpoint | Descripción |
-| --- | --- | --- |
-| `GET` | `/users` | Obtener usuarios |
-| `GET` | `/users/{user_id}` | Obtener un usuario |
-| `POST` | `/users` | Crear un usuario |
-| `PATCH` | `/users/{user_id}` | Actualizar parcialmente un usuario |
-| `DELETE` | `/users/{user_id}` | Eliminar un usuario |
+| Método   | Endpoint           | Descripción                        |
+| -------- | ------------------ | ---------------------------------- |
+| `GET`    | `/users`           | Obtener usuarios                   |
+| `GET`    | `/users/{user_id}` | Obtener un usuario                 |
+| `POST`   | `/users`           | Crear un usuario                   |
+| `PATCH`  | `/users/{user_id}` | Actualizar parcialmente un usuario |
+| `DELETE` | `/users/{user_id}` | Eliminar un usuario                |
 
 El listado admite:
 
-```text
+```http
 GET /users?limit=10
 ```
 
@@ -240,13 +261,17 @@ con un límite validado entre `1` y `100`.
 
 ### Tasks
 
-| Método | Endpoint | Descripción |
-| --- | --- | --- |
-| `POST` | `/users/{user_id}/tasks` | Crear una tarea para un usuario |
-| `GET` | `/users/{user_id}/tasks` | Obtener las tareas de un usuario |
-| `GET` | `/tasks/{task_id}` | Obtener una tarea por ID |
+| Método   | Endpoint                 | Descripción                       |
+| -------- | ------------------------ | --------------------------------- |
+| `POST`   | `/users/{user_id}/tasks` | Crear una tarea para un usuario   |
+| `GET`    | `/users/{user_id}/tasks` | Obtener las tareas de un usuario  |
+| `GET`    | `/tasks/{task_id}`       | Obtener una tarea por ID          |
+| `PATCH`  | `/tasks/{task_id}`       | Actualizar parcialmente una tarea |
+| `DELETE` | `/tasks/{task_id}`       | Eliminar una tarea                |
 
-El CRUD completo de `Task` todavía está en desarrollo.
+El CRUD básico de `Task` está completo.
+
+El endpoint `PATCH` permite modificar únicamente los campos enviados. Campos controlados por la aplicación como `id`, `created_at` y `user_id` no forman parte del esquema de actualización.
 
 ---
 
@@ -267,6 +292,9 @@ El CRUD completo de `Task` todavía está en desarrollo.
 
 409 Conflict
     La operación entra en conflicto con el estado actual de los datos.
+
+422 Unprocessable Entity
+    Los datos enviados no cumplen las validaciones esperadas.
 ```
 
 Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`.
@@ -279,10 +307,12 @@ PostgreSQL bloquea primero la eliminación mediante la clave foránea y la aplic
 
 Antes de ejecutar el proyecto necesitas:
 
-- Python 3.10 o superior.
-- PostgreSQL instalado y ejecutándose.
-- Git.
-- Un entorno virtual de Python.
+* Python 3.11 o superior.
+* PostgreSQL instalado y ejecutándose.
+* Git.
+* `uv`.
+
+El proyecto utiliza actualmente Python 3.11+ debido a los requisitos de compatibilidad del conjunto de dependencias bloqueado.
 
 ---
 
@@ -295,45 +325,95 @@ git clone <URL_DEL_REPOSITORIO>
 cd fastapi-rest-api
 ```
 
-### 2. Crear el entorno virtual
-
-Windows:
+### 2. Verificar `uv`
 
 ```bash
-python -m venv .venv
+uv --version
 ```
 
-Linux/macOS:
-
-```bash
-python3 -m venv .venv
-```
-
-### 3. Activar el entorno virtual
-
-PowerShell:
+En Windows también puede instalarse mediante WinGet:
 
 ```powershell
-.venv\Scripts\Activate.ps1
+winget install --id=astral-sh.uv -e
 ```
 
-CMD:
+### 3. Instalar las dependencias
 
-```cmd
-.venv\Scripts\activate
-```
-
-Linux/macOS:
+Desde la raíz del proyecto:
 
 ```bash
-source .venv/bin/activate
+uv sync
 ```
 
-### 4. Instalar dependencias
+`uv` utiliza `pyproject.toml` y `uv.lock` para crear y sincronizar automáticamente el entorno virtual `.venv`.
+
+No es necesario crear manualmente el entorno con `python -m venv` ni instalar las dependencias mediante `pip install -r requirements.txt`.
+
+### 4. Ejecutar comandos dentro del entorno
+
+No es necesario activar manualmente `.venv` si se utiliza:
 
 ```bash
-python -m pip install -r requirements.txt
+uv run
 ```
+
+Por ejemplo:
+
+```bash
+uv run python --version
+```
+
+`uv run` ejecuta el comando dentro del entorno del proyecto.
+
+---
+
+## Gestión de dependencias con uv
+
+### Agregar una dependencia
+
+```bash
+uv add nombre-paquete
+```
+
+Por ejemplo:
+
+```bash
+uv add redis
+```
+
+### Eliminar una dependencia
+
+```bash
+uv remove nombre-paquete
+```
+
+### Sincronizar el entorno
+
+```bash
+uv sync
+```
+
+### Ver el árbol de dependencias
+
+```bash
+uv tree
+```
+
+### Ejecutar comandos del proyecto
+
+```bash
+uv run <comando>
+```
+
+Ejemplo:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+Las dependencias directas deben declararse mediante `pyproject.toml`.
+
+No se deben agregar manualmente como dependencias directas paquetes transitivos que solamente son requeridos por otras librerías.
 
 ---
 
@@ -391,22 +471,30 @@ desde `psql`.
 
 El esquema de la base de datos se administra mediante Alembic.
 
+Todos los comandos se ejecutan dentro del entorno administrado por `uv`.
+
 ### Ver la versión actual
 
 ```bash
-alembic current
+uv run alembic current
+```
+
+### Ver las cabezas de migración
+
+```bash
+uv run alembic heads
 ```
 
 ### Ver el historial
 
 ```bash
-alembic history
+uv run alembic history
 ```
 
 ### Aplicar todas las migraciones pendientes
 
 ```bash
-alembic upgrade head
+uv run alembic upgrade head
 ```
 
 ### Crear una migración automáticamente
@@ -414,13 +502,13 @@ alembic upgrade head
 Después de modificar los modelos SQLAlchemy:
 
 ```bash
-alembic revision --autogenerate -m "descripcion del cambio"
+uv run alembic revision --autogenerate -m "descripcion del cambio"
 ```
 
 Siempre se debe revisar manualmente el archivo generado antes de ejecutar:
 
 ```bash
-alembic upgrade head
+uv run alembic upgrade head
 ```
 
 ### Regla del proyecto
@@ -443,7 +531,7 @@ Cambio del esquema SQL     -> requiere migración
 Desde la raíz del proyecto:
 
 ```bash
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 Resultado esperado:
@@ -481,9 +569,7 @@ Swagger permite probar directamente los endpoints desde el navegador.
 ```http
 POST /users
 Content-Type: application/json
-```
 
-```json
 {
   "name": "Ana",
   "email": "ana@example.com"
@@ -507,9 +593,7 @@ Respuesta aproximada:
 ```http
 PATCH /users/1
 Content-Type: application/json
-```
 
-```json
 {
   "is_active": false
 }
@@ -522,9 +606,7 @@ Solo los campos enviados son modificados.
 ```http
 POST /users/1/tasks
 Content-Type: application/json
-```
 
-```json
 {
   "title": "Aprender relaciones",
   "description": "Estudiar ForeignKey y relationship"
@@ -544,6 +626,47 @@ Respuesta aproximada:
 }
 ```
 
+### Actualizar parcialmente una tarea
+
+```http
+PATCH /tasks/1
+Content-Type: application/json
+
+{
+  "is_completed": true
+}
+```
+
+Solo se modifican los campos enviados.
+
+Por ejemplo:
+
+```json
+{
+  "description": null
+}
+```
+
+permite eliminar la descripción de la tarea sin modificar el resto de campos.
+
+### Eliminar una tarea
+
+```http
+DELETE /tasks/1
+```
+
+Si la tarea existe:
+
+```text
+204 No Content
+```
+
+Si no existe:
+
+```text
+404 Not Found
+```
+
 ---
 
 ## Validación de datos
@@ -558,6 +681,7 @@ UserUpdate
 UserResponse
 
 TaskCreate
+TaskUpdate
 TaskResponse
 ```
 
@@ -569,17 +693,21 @@ Ejemplo conceptual:
 JSON
  |
  v
-UserCreate
+TaskUpdate
  |
  v
 Service
  |
  v
-SQLAlchemy User
+SQLAlchemy Task
  |
  v
 PostgreSQL
 ```
+
+Para actualizaciones parciales se utilizan únicamente los campos enviados por el cliente.
+
+Esto evita modificar accidentalmente otros valores existentes.
 
 En la respuesta:
 
@@ -587,10 +715,10 @@ En la respuesta:
 PostgreSQL
  |
  v
-SQLAlchemy User
+SQLAlchemy Model
  |
  v
-UserResponse
+Pydantic Response
  |
  v
 JSON
@@ -602,23 +730,48 @@ JSON
 
 El proyecto ya aplica algunas buenas prácticas:
 
-- Variables sensibles fuera del código mediante `.env`.
-- `.env` ignorado por Git.
-- Validación de request bodies con Pydantic.
-- Restricciones también a nivel PostgreSQL.
-- Emails únicos mediante una constraint `UNIQUE`.
-- Foreign keys para garantizar integridad referencial.
-- `rollback()` después de errores de transacción.
-- Modelos de entrada y salida separados.
-- Manejo de errores HTTP como `404` y `409`.
-- Migraciones de base de datos versionadas.
-- Separación entre routers y services.
+* Variables sensibles fuera del código mediante `.env`.
+* `.env` ignorado por Git.
+* Validación de request bodies con Pydantic.
+* Restricciones también a nivel PostgreSQL.
+* Emails únicos mediante una constraint `UNIQUE`.
+* Foreign keys para garantizar integridad referencial.
+* `rollback()` después de errores de transacción.
+* Modelos de entrada y salida separados.
+* Campos modificables controlados mediante schemas específicos.
+* Manejo de errores HTTP como `404`, `409` y `422`.
+* Migraciones de base de datos versionadas.
+* Separación entre routers y services.
+* Dependencias directas declaradas explícitamente.
+* Versiones reproducibles mediante `uv.lock`.
 
-Todavía faltan mecanismos importantes como autenticación, autorización y tests automatizados.
+Todavía faltan mecanismos importantes como tests automatizados, autenticación y autorización.
 
 ---
 
 ## Flujo de desarrollo
+
+El desarrollo se organiza en bloques funcionales.
+
+Después de completar y comprobar cada bloque se realiza un commit independiente.
+
+Flujo:
+
+```text
+Implementar
+    |
+    v
+Probar
+    |
+    v
+Revisar cambios
+    |
+    v
+Commit
+    |
+    v
+Siguiente bloque
+```
 
 Antes de realizar un commit:
 
@@ -635,7 +788,9 @@ git commit -m "Descripcion clara del cambio"
 git push
 ```
 
-Las migraciones de Alembic también forman parte del código fuente y deben incluirse en Git.
+Los mensajes de commit buscan ser breves y descriptivos.
+
+Las migraciones de Alembic y `uv.lock` forman parte del código fuente y deben incluirse en Git.
 
 Nunca se debe incluir `.env`.
 
@@ -645,39 +800,42 @@ Nunca se debe incluir `.env`.
 
 ### Implementado
 
-- [x] Proyecto Python y entorno virtual.
-- [x] FastAPI.
-- [x] Uvicorn.
-- [x] Documentación OpenAPI / Swagger.
-- [x] Validación con Pydantic.
-- [x] PostgreSQL.
-- [x] SQLAlchemy ORM.
-- [x] Psycopg 3.
-- [x] Configuración mediante `.env`.
-- [x] CRUD de usuarios.
-- [x] Manejo de errores `404` y `409`.
-- [x] Alembic.
-- [x] Migraciones.
-- [x] Arquitectura con routers y services.
-- [x] Relación `User 1:N Task`.
-- [x] Foreign keys.
-- [x] Creación y consulta de tareas.
+* [x] Proyecto Python.
+* [x] FastAPI.
+* [x] Uvicorn.
+* [x] Documentación OpenAPI / Swagger.
+* [x] Validación con Pydantic.
+* [x] PostgreSQL.
+* [x] SQLAlchemy ORM.
+* [x] Psycopg 3.
+* [x] Configuración mediante `.env`.
+* [x] CRUD de usuarios.
+* [x] Manejo de errores `404`, `409` y `422`.
+* [x] Alembic.
+* [x] Migraciones.
+* [x] Arquitectura con routers y services.
+* [x] Relación `User 1:N Task`.
+* [x] Foreign keys.
+* [x] CRUD de tareas.
+* [x] Actualizaciones parciales con `PATCH`.
+* [x] Gestión de dependencias con `uv`.
+* [x] `pyproject.toml`.
+* [x] Lockfile reproducible con `uv.lock`.
+* [x] Entorno virtual gestionado mediante `uv`.
 
 ### Próximos pasos
 
-- [ ] Completar `PATCH /tasks/{task_id}`.
-- [ ] Completar `DELETE /tasks/{task_id}`.
-- [ ] Añadir tests con `pytest`.
-- [ ] Probar la API con `TestClient`.
-- [ ] Crear una base de datos separada para testing.
-- [ ] Añadir paginación más completa.
-- [ ] Autenticación de usuarios.
-- [ ] Hash seguro de contraseñas.
-- [ ] Autorización y permisos.
-- [ ] Mejorar manejo global de errores.
-- [ ] Logging.
-- [ ] Docker.
-- [ ] Preparar configuración para producción.
+* [ ] Añadir tests con `pytest`.
+* [ ] Probar la API con `TestClient`.
+* [ ] Crear una base de datos separada para testing.
+* [ ] Añadir paginación más completa.
+* [ ] Autenticación de usuarios.
+* [ ] Hash seguro de contraseñas.
+* [ ] Autorización y permisos.
+* [ ] Mejorar manejo global de errores.
+* [ ] Logging.
+* [ ] Docker.
+* [ ] Preparar configuración para producción.
 
 ---
 
@@ -715,7 +873,15 @@ DELETE FROM users
 WHERE id = 1;
 ```
 
-SQLAlchemy facilita trabajar con bases de datos desde Python, pero no elimina la necesidad de comprender SQL y el modelo relacional.
+De forma similar:
+
+```python
+task_data.model_dump(exclude_unset=True)
+```
+
+permite distinguir los campos enviados realmente durante una actualización parcial.
+
+SQLAlchemy, Pydantic, FastAPI y `uv` simplifican distintas partes del desarrollo, pero la intención del proyecto es comprender qué problema resuelve cada herramienta y qué sucede detrás de cada operación.
 
 ---
 
