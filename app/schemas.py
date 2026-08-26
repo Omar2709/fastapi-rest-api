@@ -103,6 +103,62 @@ class TaskCreate(BaseModel):
 
         return value
 
+class TaskUpdate(BaseModel):
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=120,
+    )
+
+    description: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+
+    is_completed: bool | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+
+        if not value:
+            raise ValueError(
+                "El título no puede estar vacío"
+            )
+
+        return value
+
+    @model_validator(mode="after")
+    def validate_update(self):
+        if not self.model_fields_set:
+            raise ValueError(
+                "Debes enviar al menos un campo para actualizar"
+            )
+
+        if (
+            "title" in self.model_fields_set
+            and self.title is None
+        ):
+            raise ValueError(
+                "title no puede ser null"
+            )
+
+        if (
+            "is_completed" in self.model_fields_set
+            and self.is_completed is None
+        ):
+            raise ValueError(
+                "is_completed no puede ser null"
+            )
+
+        return self
 
 class TaskResponse(BaseModel):
     id: int

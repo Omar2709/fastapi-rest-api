@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Task, User
-from app.schemas import TaskCreate
+from app.schemas import TaskCreate, TaskUpdate
 
 
 def create_task(
@@ -48,3 +48,31 @@ def get_task(
         Task,
         task_id,
     )
+
+def update_task(
+    db: Session,
+    task: Task,
+    task_data: TaskUpdate,
+) -> Task:
+    update_data = task_data.model_dump(
+        exclude_unset=True
+    )
+
+    for field_name, value in update_data.items():
+        setattr(
+            task,
+            field_name,
+            value,
+        )
+
+    db.commit()
+    db.refresh(task)
+
+    return task
+
+def delete_task(
+    db: Session,
+    task: Task,
+) -> None:
+    db.delete(task)
+    db.commit()

@@ -13,6 +13,7 @@ from app.database import get_db
 from app.schemas import (
     TaskCreate,
     TaskResponse,
+    TaskUpdate,
 )
 from app.services import tasks as task_service
 from app.services import users as user_service
@@ -108,3 +109,53 @@ def get_task(
         )
 
     return task
+
+@router.patch(
+    "/tasks/{task_id}",
+    response_model=TaskResponse,
+)
+def update_task(
+    task_id: int,
+    task_data: TaskUpdate,
+    db: SessionDep,
+):
+    task = task_service.get_task(
+        db,
+        task_id,
+    )
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarea no encontrada",
+        )
+
+    return task_service.update_task(
+        db,
+        task,
+        task_data,
+    )
+
+@router.delete(
+    "/tasks/{task_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_task(
+    task_id: int,
+    db: SessionDep,
+) -> None:
+    task = task_service.get_task(
+        db,
+        task_id,
+    )
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarea no encontrada",
+        )
+
+    task_service.delete_task(
+        db,
+        task,
+    )
