@@ -1,5 +1,6 @@
 from fastapi import status
 from fastapi.testclient import TestClient
+import pytest
 
 
 def test_create_user(
@@ -166,3 +167,220 @@ def test_delete_user(
     assert get_response.status_code == (
         status.HTTP_404_NOT_FOUND
     )
+
+def test_get_nonexistent_user_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/users/999999999"
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Usuario no encontrado"
+    }
+
+def test_update_user_with_empty_body_returns_422(
+    client: TestClient,
+    user_factory,
+) -> None:
+    user = user_factory()
+
+    response = client.patch(
+        f"/users/{user['id']}",
+        json={},
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()
+
+def test_update_nonexistent_user_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.patch(
+        "/users/999999999",
+        json={
+            "name": "Nuevo Nombre",
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Usuario no encontrado"
+    }
+
+def test_delete_nonexistent_user_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.delete(
+        "/users/999999999"
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Usuario no encontrado"
+    }
+
+def test_create_user_with_duplicate_email_returns_409(
+    client: TestClient,
+    user_factory,
+) -> None:
+    user_factory(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    response = client.post(
+        "/users",
+        json={
+            "name": "Carlos",
+            "email": "ana@example.com",
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_409_CONFLICT
+    )
+
+    assert response.json() == {
+        "detail": (
+            "Ya existe un usuario con ese email"
+        )
+    }
+
+def test_update_user_with_duplicate_email_returns_409(
+    client: TestClient,
+    user_factory,
+) -> None:
+    first_user = user_factory(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    second_user = user_factory(
+        name="Carlos",
+        email="carlos@example.com",
+    )
+
+    response = client.patch(
+        f"/users/{second_user['id']}",
+        json={
+            "email": first_user["email"],
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_409_CONFLICT
+    )
+
+    assert response.json() == {
+        "detail": (
+            "Ya existe un usuario con ese email"
+        )
+    }
+
+    get_response = client.get(
+        f"/users/{second_user['id']}"
+    )
+
+    assert get_response.status_code == (
+        status.HTTP_200_OK
+    )
+
+    stored_user = get_response.json()
+
+    assert stored_user["email"] == (
+        "carlos@example.com"
+    )
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "name": "A",
+            "email": "ana@example.com",
+        },
+        {
+            "name": "Ana",
+            "email": "correo-invalido",
+        },
+    ],
+)
+def test_create_user_with_invalid_data_returns_422(
+    client: TestClient,
+    payload: dict,
+) -> None:
+    response = client.post(
+        "/users",
+        json=payload,
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()
+
+def test_delete_user_with_tasks_returns_409(
+    client: TestClient,
+    user_factory,
+    task_factory,
+) -> None:
+    user = user_factory()
+
+    task_factory(
+        user_id=user["id"],
+        title="Tarea pendiente",
+    )
+
+    response = client.delete(
+        f"/users/{user['id']}"
+    )
+
+    assert response.status_code == (
+        status.HTTP_409_CONFLICT
+    )
+
+    assert response.json() == {
+        "detail": (
+            "No se puede eliminar el usuario "
+            "porque tiene tareas asociadas"
+        )
+    }
+
+    get_response = client.get(
+        f"/users/{user['id']}"
+    )
+
+    assert get_response.status_code == (
+        status.HTTP_200_OK
+    )
+
+def test_update_user_with_empty_body_returns_422(
+    client: TestClient,
+    user_factory,
+) -> None:
+    user = user_factory()
+
+    response = client.patch(
+        f"/users/{user['id']}",
+        json={},
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()

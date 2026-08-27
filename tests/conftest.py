@@ -118,3 +118,28 @@ def user_factory(
         return response.json()
 
     return create_user
+
+@pytest.fixture
+def task_factory(
+    client: TestClient,
+) -> Callable[..., dict]:
+    def create_task(
+        user_id: int,
+        title: str = "Tarea de prueba",
+        description: str | None = None,
+    ) -> dict:
+        response = client.post(
+            f"/users/{user_id}/tasks",
+            json={
+                "title": title,
+                "description": description,
+            },
+        )
+
+        assert response.status_code == (
+            status.HTTP_201_CREATED
+        )
+
+        return response.json()
+
+    return create_task
