@@ -1,9 +1,10 @@
-from collections.abc import Generator
+from collections.abc import Callable ,Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from fastapi import status
 
 import app.models
 from app.config import settings
@@ -93,3 +94,27 @@ def client(
         yield test_client
 
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def user_factory(
+    client: TestClient,
+) -> Callable[..., dict]:
+    def create_user(
+        name: str = "Ana",
+        email: str = "ana@example.com",
+    ) -> dict:
+        response = client.post(
+            "/users",
+            json={
+                "name": name,
+                "email": email,
+            },
+        )
+
+        assert response.status_code == (
+            status.HTTP_201_CREATED
+        )
+
+        return response.json()
+
+    return create_user
