@@ -1,3 +1,5 @@
+import pytest
+
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -240,4 +242,187 @@ def test_delete_task(
     assert get_response.status_code == (
         status.HTTP_404_NOT_FOUND
     )
+
+def test_create_task_for_nonexistent_user_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/users/999999999/tasks",
+        json={
+            "title": "Tarea de prueba",
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Usuario no encontrado"
+    }
+
+def test_get_tasks_for_nonexistent_user_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/users/999999999/tasks"
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Usuario no encontrado"
+    }
+
+def test_get_nonexistent_task_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/tasks/999999999"
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Tarea no encontrada"
+    }
+
+def test_update_nonexistent_task_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.patch(
+        "/tasks/999999999",
+        json={
+            "title": "Nuevo título",
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Tarea no encontrada"
+    }
+
+def test_delete_nonexistent_task_returns_404(
+    client: TestClient,
+) -> None:
+    response = client.delete(
+        "/tasks/999999999"
+    )
+
+    assert response.status_code == (
+        status.HTTP_404_NOT_FOUND
+    )
+
+    assert response.json() == {
+        "detail": "Tarea no encontrada"
+    }
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "title": "",
+        },
+        {
+            "title": "     ",
+        },
+        {
+            "title": "A" * 121,
+        },
+    ],
+)
+def test_create_task_with_invalid_data_returns_422(
+    client: TestClient,
+    user_factory,
+    payload: dict,
+) -> None:
+    user = user_factory()
+
+    response = client.post(
+        f"/users/{user['id']}/tasks",
+        json=payload,
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()
+
+def test_update_task_with_empty_body_returns_422(
+    client: TestClient,
+    user_factory,
+    task_factory,
+) -> None:
+    user = user_factory()
+
+    task = task_factory(
+        user_id=user["id"],
+    )
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={},
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()
+
+def test_update_task_with_null_title_returns_422(
+    client: TestClient,
+    user_factory,
+    task_factory,
+) -> None:
+    user = user_factory()
+
+    task = task_factory(
+        user_id=user["id"],
+    )
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={
+            "title": None,
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()
+
+def test_update_task_with_null_status_returns_422(
+    client: TestClient,
+    user_factory,
+    task_factory,
+) -> None:
+    user = user_factory()
+
+    task = task_factory(
+        user_id=user["id"],
+    )
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={
+            "is_completed": None,
+        },
+    )
+
+    assert response.status_code == (
+        status.HTTP_422_UNPROCESSABLE_CONTENT
+    )
+
+    assert "detail" in response.json()
 
