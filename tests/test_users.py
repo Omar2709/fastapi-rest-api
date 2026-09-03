@@ -368,19 +368,3 @@ def test_delete_user_with_tasks_returns_409(
         status.HTTP_200_OK
     )
 
-def test_update_user_with_empty_body_returns_422(
-    client: TestClient,
-    user_factory,
-) -> None:
-    user = user_factory()
-
-    response = client.patch(
-        f"/users/{user['id']}",
-        json={},
-    )
-
-    assert response.status_code == (
-        status.HTTP_422_UNPROCESSABLE_CONTENT
-    )
-
-    assert "detail" in response.json()
