@@ -1,7 +1,7 @@
 import pytest
-
 from fastapi import status
 from fastapi.testclient import TestClient
+
 
 def test_create_task(
     client: TestClient,
@@ -17,21 +17,18 @@ def test_create_task(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_201_CREATED
-    )
+    assert response.status_code == (status.HTTP_201_CREATED)
 
     data = response.json()
 
     assert data["title"] == "Aprender testing"
-    assert data["description"] == (
-        "Probar endpoints de Tasks"
-    )
+    assert data["description"] == ("Probar endpoints de Tasks")
     assert data["is_completed"] is False
     assert data["user_id"] == user["id"]
 
     assert isinstance(data["id"], int)
     assert "created_at" in data
+
 
 def test_get_tasks_by_user(
     client: TestClient,
@@ -50,27 +47,21 @@ def test_get_tasks_by_user(
         title="Segunda tarea",
     )
 
-    response = client.get(
-        f"/users/{user['id']}/tasks"
-    )
+    response = client.get(f"/users/{user['id']}/tasks")
 
-    assert response.status_code == (
-        status.HTTP_200_OK
-    )
+    assert response.status_code == (status.HTTP_200_OK)
 
     data = response.json()
 
     assert len(data) == 2
 
-    titles = {
-        task["title"]
-        for task in data
-    }
+    titles = {task["title"] for task in data}
 
     assert titles == {
         "Primera tarea",
         "Segunda tarea",
     }
+
 
 def test_get_tasks_returns_only_user_tasks(
     client: TestClient,
@@ -97,19 +88,16 @@ def test_get_tasks_returns_only_user_tasks(
         title="Tarea de Carlos",
     )
 
-    response = client.get(
-        f"/users/{first_user['id']}/tasks"
-    )
+    response = client.get(f"/users/{first_user['id']}/tasks")
 
-    assert response.status_code == (
-        status.HTTP_200_OK
-    )
+    assert response.status_code == (status.HTTP_200_OK)
 
     data = response.json()
 
     assert len(data) == 1
     assert data[0]["title"] == "Tarea de Ana"
     assert data[0]["user_id"] == first_user["id"]
+
 
 def test_get_task_by_id(
     client: TestClient,
@@ -124,13 +112,9 @@ def test_get_task_by_id(
         description="Estudiar TestClient",
     )
 
-    response = client.get(
-        f"/tasks/{task['id']}"
-    )
+    response = client.get(f"/tasks/{task['id']}")
 
-    assert response.status_code == (
-        status.HTTP_200_OK
-    )
+    assert response.status_code == (status.HTTP_200_OK)
 
     data = response.json()
 
@@ -138,6 +122,7 @@ def test_get_task_by_id(
     assert data["title"] == "Aprender FastAPI"
     assert data["description"] == "Estudiar TestClient"
     assert data["user_id"] == user["id"]
+
 
 def test_update_task(
     client: TestClient,
@@ -160,9 +145,7 @@ def test_update_task(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_200_OK
-    )
+    assert response.status_code == (status.HTTP_200_OK)
 
     data = response.json()
 
@@ -171,21 +154,16 @@ def test_update_task(
     assert data["is_completed"] is True
     assert data["user_id"] == user["id"]
 
-    get_response = client.get(
-        f"/tasks/{task['id']}"
-    )
+    get_response = client.get(f"/tasks/{task['id']}")
 
-    assert get_response.status_code == (
-        status.HTTP_200_OK
-    )
+    assert get_response.status_code == (status.HTTP_200_OK)
 
     stored_task = get_response.json()
 
     assert stored_task["title"] == "Dominar FastAPI"
-    assert stored_task["description"] == (
-        "Descripción original"
-    )
+    assert stored_task["description"] == ("Descripción original")
     assert stored_task["is_completed"] is True
+
 
 def test_update_task_can_remove_description(
     client: TestClient,
@@ -206,13 +184,12 @@ def test_update_task_can_remove_description(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_200_OK
-    )
+    assert response.status_code == (status.HTTP_200_OK)
 
     data = response.json()
 
     assert data["description"] is None
+
 
 def test_delete_task(
     client: TestClient,
@@ -225,23 +202,16 @@ def test_delete_task(
         user_id=user["id"],
     )
 
-    response = client.delete(
-        f"/tasks/{task['id']}"
-    )
+    response = client.delete(f"/tasks/{task['id']}")
 
-    assert response.status_code == (
-        status.HTTP_204_NO_CONTENT
-    )
+    assert response.status_code == (status.HTTP_204_NO_CONTENT)
 
     assert response.content == b""
 
-    get_response = client.get(
-        f"/tasks/{task['id']}"
-    )
+    get_response = client.get(f"/tasks/{task['id']}")
 
-    assert get_response.status_code == (
-        status.HTTP_404_NOT_FOUND
-    )
+    assert get_response.status_code == (status.HTTP_404_NOT_FOUND)
+
 
 def test_create_task_for_nonexistent_user_returns_404(
     client: TestClient,
@@ -253,43 +223,30 @@ def test_create_task_for_nonexistent_user_returns_404(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_404_NOT_FOUND
-    )
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {
-        "detail": "Usuario no encontrado"
-    }
+    assert response.json() == {"detail": "Usuario no encontrado"}
+
 
 def test_get_tasks_for_nonexistent_user_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.get(
-        "/users/999999999/tasks"
-    )
+    response = client.get("/users/999999999/tasks")
 
-    assert response.status_code == (
-        status.HTTP_404_NOT_FOUND
-    )
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {
-        "detail": "Usuario no encontrado"
-    }
+    assert response.json() == {"detail": "Usuario no encontrado"}
+
 
 def test_get_nonexistent_task_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.get(
-        "/tasks/999999999"
-    )
+    response = client.get("/tasks/999999999")
 
-    assert response.status_code == (
-        status.HTTP_404_NOT_FOUND
-    )
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {
-        "detail": "Tarea no encontrada"
-    }
+    assert response.json() == {"detail": "Tarea no encontrada"}
+
 
 def test_update_nonexistent_task_returns_404(
     client: TestClient,
@@ -301,28 +258,20 @@ def test_update_nonexistent_task_returns_404(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_404_NOT_FOUND
-    )
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {
-        "detail": "Tarea no encontrada"
-    }
+    assert response.json() == {"detail": "Tarea no encontrada"}
+
 
 def test_delete_nonexistent_task_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.delete(
-        "/tasks/999999999"
-    )
+    response = client.delete("/tasks/999999999")
 
-    assert response.status_code == (
-        status.HTTP_404_NOT_FOUND
-    )
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {
-        "detail": "Tarea no encontrada"
-    }
+    assert response.json() == {"detail": "Tarea no encontrada"}
+
 
 @pytest.mark.parametrize(
     "payload",
@@ -350,11 +299,10 @@ def test_create_task_with_invalid_data_returns_422(
         json=payload,
     )
 
-    assert response.status_code == (
-        status.HTTP_422_UNPROCESSABLE_CONTENT
-    )
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     assert "detail" in response.json()
+
 
 def test_update_task_with_empty_body_returns_422(
     client: TestClient,
@@ -372,11 +320,10 @@ def test_update_task_with_empty_body_returns_422(
         json={},
     )
 
-    assert response.status_code == (
-        status.HTTP_422_UNPROCESSABLE_CONTENT
-    )
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     assert "detail" in response.json()
+
 
 def test_update_task_with_null_title_returns_422(
     client: TestClient,
@@ -396,11 +343,10 @@ def test_update_task_with_null_title_returns_422(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_422_UNPROCESSABLE_CONTENT
-    )
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     assert "detail" in response.json()
+
 
 def test_update_task_with_null_status_returns_422(
     client: TestClient,
@@ -420,9 +366,6 @@ def test_update_task_with_null_status_returns_422(
         },
     )
 
-    assert response.status_code == (
-        status.HTTP_422_UNPROCESSABLE_CONTENT
-    )
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     assert "detail" in response.json()
-

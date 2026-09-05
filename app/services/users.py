@@ -9,22 +9,18 @@ from app.schemas import UserCreate, UserUpdate
 class DuplicateEmailError(Exception):
     pass
 
+
 class UserHasTasksError(Exception):
     pass
+
 
 def get_users(
     db: Session,
     limit: int,
 ) -> list[User]:
-    statement = (
-        select(User)
-        .order_by(User.id)
-        .limit(limit)
-    )
+    statement = select(User).order_by(User.id).limit(limit)
 
-    return list(
-        db.scalars(statement).all()
-    )
+    return list(db.scalars(statement).all())
 
 
 def get_user(
@@ -66,14 +62,10 @@ def update_user(
     user: User,
     user_data: UserUpdate,
 ) -> User:
-    update_data = user_data.model_dump(
-        exclude_unset=True
-    )
+    update_data = user_data.model_dump(exclude_unset=True)
 
     if "email" in update_data:
-        update_data["email"] = str(
-            update_data["email"]
-        )
+        update_data["email"] = str(update_data["email"])
 
     for field_name, value in update_data.items():
         setattr(

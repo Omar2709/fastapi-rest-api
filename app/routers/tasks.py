@@ -18,7 +18,6 @@ from app.schemas import (
 from app.services import tasks as task_service
 from app.services import users as user_service
 
-
 router = APIRouter(
     tags=["tasks"],
 )
@@ -110,6 +109,7 @@ def get_task(
 
     return task
 
+
 @router.patch(
     "/tasks/{task_id}",
     response_model=TaskResponse,
@@ -135,6 +135,7 @@ def update_task(
         task,
         task_data,
     )
+
 
 @router.delete(
     "/tasks/{task_id}",

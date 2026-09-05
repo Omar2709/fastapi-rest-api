@@ -62,7 +62,7 @@ class User(Base):
         server_default=true(),
     )
 
-    tasks: Mapped[list["Task"]] = relationship(
+    tasks: Mapped[list[Task]] = relationship(
         back_populates="user",
         passive_deletes=True,
     )
@@ -109,6 +109,6 @@ class Task(Base):
         index=True,
     )
 
-    user: Mapped["User"] = relationship(
+    user: Mapped[User] = relationship(
         back_populates="tasks",
     )

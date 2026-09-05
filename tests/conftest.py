@@ -1,16 +1,15 @@
-from collections.abc import Callable ,Generator
+from collections.abc import Callable, Generator
 
 import pytest
+from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from fastapi import status
 
 import app.models
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
-
 
 TEST_DB_NAME = f"{settings.db_name}_test"
 
@@ -55,9 +54,7 @@ def prepare_test_database() -> Generator[None, None, None]:
 @pytest.fixture
 def db_session() -> Generator[Session, None, None]:
     with TestingSessionLocal() as session:
-        for table in reversed(
-            Base.metadata.sorted_tables
-        ):
+        for table in reversed(Base.metadata.sorted_tables):
             session.execute(table.delete())
 
         session.commit()
@@ -66,9 +63,7 @@ def db_session() -> Generator[Session, None, None]:
 
         session.rollback()
 
-        for table in reversed(
-            Base.metadata.sorted_tables
-        ):
+        for table in reversed(Base.metadata.sorted_tables):
             session.execute(table.delete())
 
         session.commit()
@@ -86,14 +81,13 @@ def client(
     ]:
         yield db_session
 
-    app.dependency_overrides[get_db] = (
-        override_get_db
-    )
+    app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def user_factory(
@@ -111,13 +105,12 @@ def user_factory(
             },
         )
 
-        assert response.status_code == (
-            status.HTTP_201_CREATED
-        )
+        assert response.status_code == (status.HTTP_201_CREATED)
 
         return response.json()
 
     return create_user
+
 
 @pytest.fixture
 def task_factory(
@@ -136,9 +129,7 @@ def task_factory(
             },
         )
 
-        assert response.status_code == (
-            status.HTTP_201_CREATED
-        )
+        assert response.status_code == (status.HTTP_201_CREATED)
 
         return response.json()
 

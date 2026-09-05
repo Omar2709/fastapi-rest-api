@@ -29,15 +29,10 @@ def get_tasks_by_user(
     limit: int,
 ) -> list[Task]:
     statement = (
-        select(Task)
-        .where(Task.user_id == user_id)
-        .order_by(Task.id)
-        .limit(limit)
+        select(Task).where(Task.user_id == user_id).order_by(Task.id).limit(limit)
     )
 
-    return list(
-        db.scalars(statement).all()
-    )
+    return list(db.scalars(statement).all())
 
 
 def get_task(
@@ -49,14 +44,13 @@ def get_task(
         task_id,
     )
 
+
 def update_task(
     db: Session,
     task: Task,
     task_data: TaskUpdate,
 ) -> Task:
-    update_data = task_data.model_dump(
-        exclude_unset=True
-    )
+    update_data = task_data.model_dump(exclude_unset=True)
 
     for field_name, value in update_data.items():
         setattr(
@@ -69,6 +63,7 @@ def update_task(
     db.refresh(task)
 
     return task
+
 
 def delete_task(
     db: Session,

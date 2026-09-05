@@ -19,7 +19,6 @@ from app.schemas import (
 )
 from app.services import users as user_service
 
-
 router = APIRouter(
     prefix="/users",
     tags=["users"],
@@ -154,12 +153,7 @@ def delete_user(
     except user_service.UserHasTasksError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "No se puede eliminar el usuario "
-                "porque tiene tareas asociadas"
-            ),
+            detail=("No se puede eliminar el usuario porque tiene tareas asociadas"),
         ) from exc
 
-    return Response(
-        status_code=status.HTTP_204_NO_CONTENT
-    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
