@@ -1,206 +1,208 @@
-**# FastAPI REST API**
+# FastAPI REST API
 
-API REST desarrollada con **\*\*FastAPI\*\***, **\*\*PostgreSQL\*\*** y **\*\*SQLAlchemy\*\*** como proyecto práctico de ingeniería backend.
+API REST desarrollada con **FastAPI**, **PostgreSQL** y **SQLAlchemy** como proyecto práctico de ingeniería backend.
 
 El proyecto parte de una API CRUD sencilla para estudiar los fundamentos de FastAPI, Pydantic, SQLAlchemy, PostgreSQL, migraciones y testing, y evolucionará progresivamente hacia una API orientada a procesamiento asíncrono e integraciones.
 
 El objetivo no es únicamente construir una API funcional, sino comprender problemas reales de backend como transacciones, idempotencia, procesamiento de trabajos, colas, reintentos, webhooks, seguridad y observabilidad.
 
-\> El proyecto se encuentra en desarrollo activo y evoluciona por bloques funcionales pequeños, comprobables y versionados con Git.
+> El proyecto se encuentra en desarrollo activo y evoluciona por bloques funcionales pequeños, comprobables y versionados con Git.
 
-**---**
+---
 
-**## Dirección del proyecto**
+## Dirección del proyecto
 
 La implementación actual de usuarios y tareas funciona como base para aprender y validar los fundamentos de FastAPI, Pydantic, SQLAlchemy, PostgreSQL y testing.
 
 A partir de esta base, el proyecto evolucionará hacia una API orientada a procesamiento asíncrono e integraciones, incorporando conceptos como:
 
-\- API Keys y scopes.
+- API Keys y scopes.
 
-\- Procesamiento de Jobs.
+- Procesamiento de Jobs.
 
-\- Idempotencia.
+- Idempotencia.
 
-\- Máquinas de estados.
+- Máquinas de estados.
 
-\- Transactional Outbox.
+- Transactional Outbox.
 
-\- AWS SQS.
+- AWS SQS.
 
-\- Workers y reintentos.
+- Workers y reintentos.
 
-\- Dead Letter Queues.
+- Dead Letter Queues.
 
-\- Webhooks firmados.
+- Webhooks firmados.
 
-\- Rate limiting.
+- Rate limiting.
 
-\- Observabilidad y correlation IDs.
+- Observabilidad y correlation IDs.
 
 El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento asíncrono, evitando convertir el proyecto en una aplicación tradicional de gestión de tareas.
 
-**---**
+---
 
-**## Contenido**
+## Contenido
 
-\- [Dirección del proyecto]\(#dirección-del-proyecto)
+- [Dirección del proyecto](#dirección-del-proyecto)
 
-\- [Objetivos de aprendizaje]\(#objetivos-de-aprendizaje)
+- [Objetivos de aprendizaje](#objetivos-de-aprendizaje)
 
-\- [Tecnologías]\(#tecnologías)
+- [Tecnologías](#tecnologías)
 
-\- [Arquitectura]\(#arquitectura)
+- [Arquitectura](#arquitectura)
 
-\- [Estructura del proyecto]\(#estructura-del-proyecto)
+- [Estructura del proyecto](#estructura-del-proyecto)
 
-\- [Modelo de datos]\(#modelo-de-datos)
+- [Modelo de datos](#modelo-de-datos)
 
-\- [Endpoints]\(#endpoints)
+- [Endpoints](#endpoints)
 
-\- [Versionado de la API]\(#versionado-de-la-api)
+- [Versionado de la API](#versionado-de-la-api)
 
-\- [Códigos HTTP relevantes]\(#códigos-http-relevantes)
+- [Códigos HTTP relevantes](#códigos-http-relevantes)
 
-\- [Contrato de errores]\(#contrato-de-errores)
+- [Contrato de errores](#contrato-de-errores)
 
-\- [Requisitos]\(#requisitos)
+- [Requisitos](#requisitos)
 
-\- [Instalación]\(#instalación)
+- [Instalación](#instalación)
 
-\- [Gestión de dependencias con uv]\(#gestión-de-dependencias-con-uv)
+- [Gestión de dependencias con uv](#gestión-de-dependencias-con-uv)
 
-\- [Configuración]\(#configuración)
+- [Configuración](#configuración)
 
-\- [Base de datos]\(#base-de-datos)
+- [Provisionamiento de API Keys](#provisionamiento-de-api-keys)
 
-\- [Migraciones con Alembic]\(#migraciones-con-alembic)
+- [Base de datos](#base-de-datos)
 
-\- [Ejecutar la API]\(#ejecutar-la-api)
+- [Migraciones con Alembic](#migraciones-con-alembic)
 
-\- [Ejemplos]\(#ejemplos)
+- [Ejecutar la API](#ejecutar-la-api)
 
-\- [Validación de datos]\(#validación-de-datos)
+- [Ejemplos](#ejemplos)
 
-\- [Testing]\(#testing)
+- [Validación de datos](#validación-de-datos)
 
-\- [Cobertura de tests]\(#cobertura-de-tests)
+- [Testing](#testing)
 
-\- [Calidad de código]\(#calidad-de-código)
+- [Cobertura de tests](#cobertura-de-tests)
 
-\- [Seguridad y buenas prácticas actuales]\(#seguridad-y-buenas-prácticas-actuales)
+- [Calidad de código](#calidad-de-código)
 
-\- [Flujo de desarrollo]\(#flujo-de-desarrollo)
+- [Seguridad y buenas prácticas actuales](#seguridad-y-buenas-prácticas-actuales)
 
-\- [Estado actual]\(#estado-actual)
+- [Flujo de desarrollo](#flujo-de-desarrollo)
 
-\- [Filosofía del proyecto]\(#filosofía-del-proyecto)
+- [Estado actual](#estado-actual)
 
-\- [Licencia]\(#licencia)
+- [Filosofía del proyecto](#filosofía-del-proyecto)
 
-\- [Nota]\(#nota)
+- [Licencia](#licencia)
 
-**---**
+- [Nota](#nota)
 
-**## Objetivos de aprendizaje**
+---
+
+## Objetivos de aprendizaje
 
 Este proyecto busca aprender de forma práctica:
 
-\- Cómo funciona una API REST.
+- Cómo funciona una API REST.
 
-\- Métodos HTTP: \`GET\`, \`POST\`, \`PATCH\` y \`DELETE\`.
+- Métodos HTTP: `GET`, `POST`, `PATCH` y `DELETE`.
 
-\- Códigos de estado HTTP como \`200\`, \`201\`, \`204\`, \`404\`, \`405\`, \`409\` y \`422\`.
+- Códigos de estado HTTP como `200`, `201`, `204`, `404`, `405`, `409` y `422`.
 
-\- Path parameters, query parameters y request bodies.
+- Path parameters, query parameters y request bodies.
 
-\- Validación y serialización de datos con Pydantic.
+- Validación y serialización de datos con Pydantic.
 
-\- Separación entre modelos de entrada, salida y persistencia.
+- Separación entre modelos de entrada, salida y persistencia.
 
-\- Persistencia de datos con PostgreSQL.
+- Persistencia de datos con PostgreSQL.
 
-\- SQL y conceptos relacionales.
+- SQL y conceptos relacionales.
 
-\- ORM con SQLAlchemy 2.x.
+- ORM con SQLAlchemy 2.x.
 
-\- Gestión de sesiones y transacciones.
+- Gestión de sesiones y transacciones.
 
-\- Migraciones de base de datos con Alembic.
+- Migraciones de base de datos con Alembic.
 
-\- Relaciones \`1\:N\` y claves foráneas.
+- Relaciones `1:N` y claves foráneas.
 
-\- Manejo de errores de integridad.
+- Manejo de errores de integridad.
 
-\- Arquitectura por capas.
+- Arquitectura por capas.
 
-\- Testing de endpoints con \`pytest\` y \`TestClient\`.
+- Testing de endpoints con `pytest` y `TestClient`.
 
-\- Medición de cobertura de líneas y ramas con \`pytest-cov\`.
+- Medición de cobertura de líneas y ramas con `pytest-cov`.
 
-\- Quality gates mínimos para proteger la cobertura del proyecto.
+- Quality gates mínimos para proteger la cobertura del proyecto.
 
-\- Aislamiento de pruebas mediante una base de datos separada.
+- Aislamiento de pruebas mediante una base de datos separada.
 
-\- Gestión de dependencias y entornos con \`uv\`.
+- Gestión de dependencias y entornos con `uv`.
 
-\- Uso de \`pyproject.toml\` y \`uv.lock\`.
+- Uso de `pyproject.toml` y `uv.lock`.
 
-\- Linting y formateo automático con Ruff.
+- Linting y formateo automático con Ruff.
 
-\- Control de versiones con Git y GitHub.
+- Control de versiones con Git y GitHub.
 
-\- Uso de Conventional Commits para mantener un historial consistente.
+- Uso de Conventional Commits para mantener un historial consistente.
 
-\- Preparación del flujo local para futura integración continua con GitHub Actions.
+- Preparación del flujo local para futura integración continua con GitHub Actions.
 
-**---**
+---
 
-**## Tecnologías**
+## Tecnologías
 
-\| Tecnología | Uso |
+| Tecnología | Uso |
 
-\| --- | --- |
+| --- | --- |
 
-\| Python | Lenguaje principal |
+| Python | Lenguaje principal |
 
-\| FastAPI | Framework para construir la API |
+| FastAPI | Framework para construir la API |
 
-\| Pydantic | Validación y serialización de datos |
+| Pydantic | Validación y serialización de datos |
 
-\| Pydantic Settings | Configuración mediante variables de entorno |
+| Pydantic Settings | Configuración mediante variables de entorno |
 
-\| SQLAlchemy 2.x | ORM y acceso a la base de datos |
+| SQLAlchemy 2.x | ORM y acceso a la base de datos |
 
-\| Psycopg 3 | Driver de PostgreSQL para Python |
+| Psycopg 3 | Driver de PostgreSQL para Python |
 
-\| PostgreSQL | Base de datos relacional |
+| PostgreSQL | Base de datos relacional |
 
-\| Alembic | Migraciones y versionado del esquema |
+| Alembic | Migraciones y versionado del esquema |
 
-\| Uvicorn | Servidor ASGI |
+| Uvicorn | Servidor ASGI |
 
-\| pytest | Suite de tests automatizados |
+| pytest | Suite de tests automatizados |
 
-\| pytest-cov | Cobertura de líneas y ramas sobre el código de aplicación |
+| pytest-cov | Cobertura de líneas y ramas sobre el código de aplicación |
 
-\| FastAPI TestClient | Pruebas HTTP de la aplicación |
+| FastAPI TestClient | Pruebas HTTP de la aplicación |
 
-\| Ruff | Linting, orden de imports y formateo |
+| Ruff | Linting, orden de imports y formateo |
 
-\| uv | Gestión de dependencias, entorno virtual y lockfile |
+| uv | Gestión de dependencias, entorno virtual y lockfile |
 
-\| Git | Control de versiones |
+| Git | Control de versiones |
 
-\| GitHub | Repositorio remoto |
+| GitHub | Repositorio remoto |
 
-**---**
+---
 
-**## Arquitectura**
+## Arquitectura
 
 El proyecto mantiene una separación sencilla por responsabilidades:
 
-\`\`\`text
+```text
 
 Cliente
 
@@ -242,11 +244,11 @@ Psycopg
 
 PostgreSQL
 
-\`\`\`
+```
 
-**### Responsabilidad de cada capa**
+### Responsabilidad de cada capa
 
-\`\`\`text
+```text
 
 routers/
 
@@ -286,15 +288,15 @@ tests/
 
     Pruebas automatizadas y fixtures de testing.
 
-\`\`\`
+```
 
-**---**
+---
 
-**## Estructura del proyecto**
+## Estructura del proyecto
 
 La estructura actual es similar a:
 
-\`\`\`text
+```text
 
 fastapi-rest-api/
 
@@ -302,17 +304,17 @@ fastapi-rest-api/
 
 ├── app/
 
-│   ├── \_\_init\_\_.py
+│   ├── __init__.py
 
 │   ├── api/
 
-│   │   ├── \_\_init\_\_.py
+│   │   ├── __init__.py
 
 │   │   ├── errors.py
 
 │   │   └── v1/
 
-│   │       ├── \_\_init\_\_.py
+│   │       ├── __init__.py
 
 │   │       └── router.py
 
@@ -332,7 +334,7 @@ fastapi-rest-api/
 
 │   ├── routers/
 
-│   │   ├── \_\_init\_\_.py
+│   │   ├── __init__.py
 
 │   │   ├── users.py
 
@@ -342,7 +344,7 @@ fastapi-rest-api/
 
 │   └── services/
 
-│       ├── \_\_init\_\_.py
+│       ├── __init__.py
 
 │       ├── users.py
 
@@ -362,7 +364,7 @@ fastapi-rest-api/
 
 ├── sql/
 
-│   └── 01\_users.sql
+│   └── 01_users.sql
 
 │
 
@@ -370,11 +372,11 @@ fastapi-rest-api/
 
 │   ├── conftest.py
 
-│   ├── test\_main.py
+│   ├── test_main.py
 
-│   ├── test\_tasks.py
+│   ├── test_tasks.py
 
-│   └── test\_users.py
+│   └── test_users.py
 
 │
 
@@ -392,45 +394,51 @@ fastapi-rest-api/
 
 └── README.md
 
-\`\`\`
+```
 
-\> \`.env\` contiene configuración local sensible y no debe subirse al repositorio.
+> `.env` contiene configuración local sensible y no debe subirse al repositorio.
 
-**### Gestión de dependencias**
+### Gestión de dependencias
 
-Las dependencias directas del proyecto se declaran en \`pyproject.toml\`.
+Las dependencias directas del proyecto se declaran en `pyproject.toml`.
 
-Las versiones exactas resueltas, incluidas las dependencias transitivas, quedan registradas en \`uv.lock\`.
+Las versiones exactas resueltas, incluidas las dependencias transitivas, quedan registradas en `uv.lock`.
 
-\`uv.lock\` forma parte del código fuente y debe versionarse con Git para mantener instalaciones reproducibles.
+`uv.lock` forma parte del código fuente y debe versionarse con Git para mantener instalaciones reproducibles.
 
-Las herramientas utilizadas exclusivamente durante desarrollo, como \`pytest\` y Ruff, pertenecen al grupo de dependencias de desarrollo.
+Las herramientas utilizadas exclusivamente durante desarrollo, como `pytest` y Ruff, pertenecen al grupo de dependencias de desarrollo.
 
-**---**
+---
 
-**## Modelo de datos**
+## Modelo de datos
 
 Actualmente existen tres recursos relacionados:
 
-\`\`\`text
+```text
 
-             User
-             /    \
-           1/      \1
-           /        \
-         N/          \N
-         v            v
-       Task         ApiKey
+         User
 
-\`\`\`
+         /    \
+
+       1/      \1
+
+       /        \
+
+     N/          \N
+
+     v            v
+
+   Task         ApiKey
+
+```
 
 Un usuario puede tener muchas tareas y muchas API Keys; cada tarea y cada API Key pertenecen a un único usuario.
 
-**### \`users\`**
+### `users`
 
 Campos principales:
 
-\`\`\`text
+```text
 
 id
 
@@ -438,31 +446,31 @@ name
 
 email
 
-created\_at
+created_at
 
-is\_active
+is_active
 
-\`\`\`
+```
 
 Características principales:
 
-\- \`id\` es la clave primaria.
+- `id` es la clave primaria.
 
-\- PostgreSQL genera automáticamente el \`id\`.
+- PostgreSQL genera automáticamente el `id`.
 
-\- \`email\` es obligatorio y único.
+- `email` es obligatorio y único.
 
-\- \`name\` tiene restricciones de longitud.
+- `name` tiene restricciones de longitud.
 
-\- \`is\_active\` permite desactivar usuarios sin eliminarlos físicamente.
+- `is_active` permite desactivar usuarios sin eliminarlos físicamente.
 
-\- \`created\_at\` se genera automáticamente.
+- `created_at` se genera automáticamente.
 
-**### \`tasks\`**
+### `tasks`
 
 Campos principales:
 
-\`\`\`text
+```text
 
 id
 
@@ -470,179 +478,179 @@ title
 
 description
 
-is\_completed
+is_completed
 
-created\_at
+created_at
 
-user\_id
+user_id
 
-\`\`\`
+```
 
 Características principales:
 
-\- \`id\` es la clave primaria.
+- `id` es la clave primaria.
 
-\- \`user\_id\` es una clave foránea hacia \`users.id\`.
+- `user_id` es una clave foránea hacia `users.id`.
 
-\- \`user\_id\` tiene un índice para acelerar consultas por usuario.
+- `user_id` tiene un índice para acelerar consultas por usuario.
 
-\- Una tarea no puede existir sin usuario.
+- Una tarea no puede existir sin usuario.
 
-\- \`is\_completed\` comienza en \`false\`.
+- `is_completed` comienza en `false`.
 
-\- \`description\` puede ser \`NULL\`.
+- `description` puede ser `NULL`.
 
-\- La relación utiliza \`ON DELETE RESTRICT\`.
+- La relación utiliza `ON DELETE RESTRICT`.
 
 Esto significa que PostgreSQL impide eliminar un usuario mientras tenga tareas asociadas.
 
-**### \`api_keys\`**
+### `api_keys`
 
 Campos principales:
 
-\`\`\`text
+```text
 
 id
 
-user\_id
+user_id
 
 name
 
-key\_id
+key_id
 
-key\_digest
+key_digest
 
-created\_at
+created_at
 
-expires\_at
+expires_at
 
-revoked\_at
+revoked_at
 
-last\_used\_at
+last_used_at
 
-\`\`\`
+```
 
 Características principales:
 
-\- Cada API Key pertenece a un único usuario.
+- Cada API Key pertenece a un único usuario.
 
-\- \`key\_id\` es público, único y permite localizar eficientemente la credencial.
+- `key_id` es público, único y permite localizar eficientemente la credencial.
 
-\- La API Key completa nunca se almacena en PostgreSQL.
+- La API Key completa nunca se almacena en PostgreSQL.
 
-\- \`key\_digest\` almacena el digest criptográfico utilizado para verificación.
+- `key_digest` almacena el digest criptográfico utilizado para verificación.
 
-\- \`revoked\_at\` permite revocar una credencial conservando información de auditoría.
+- `revoked_at` permite revocar una credencial conservando información de auditoría.
 
-\- \`expires\_at\` permite configurar expiración opcional.
+- `expires_at` permite configurar expiración opcional.
 
-\- \`last\_used\_at\` permitirá registrar su uso posteriormente.
+- `last_used_at` permitirá registrar su uso posteriormente.
 
-\- La relación utiliza \`ON DELETE CASCADE\`, por lo que las credenciales desaparecen si se elimina su propietario.
+- La relación utiliza `ON DELETE CASCADE`, por lo que las credenciales desaparecen si se elimina su propietario.
 
-**---**
+---
 
-**## Endpoints**
+## Endpoints
 
-**### General**
+### General
 
-\| Método | Endpoint | Descripción |
+| Método | Endpoint | Descripción |
 
-\| --- | --- | --- |
+| --- | --- | --- |
 
-\| \`GET\` | \`/\` | Mensaje principal |
+| `GET` | `/` | Mensaje principal |
 
-\| \`GET\` | \`/health\` | Comprobación básica del estado de la API |
+| `GET` | `/health` | Comprobación básica del estado de la API |
 
-**### Users**
+### Users
 
-\| Método | Endpoint | Descripción |
+| Método | Endpoint | Descripción |
 
-\| --- | --- | --- |
+| --- | --- | --- |
 
-\| \`GET\` | \`/api/v1/users\` | Obtener usuarios |
+| `GET` | `/api/v1/users` | Obtener usuarios |
 
-\| \`GET\` | \`/api/v1/users/{user\_id}\` | Obtener un usuario |
+| `GET` | `/api/v1/users/{user_id}` | Obtener un usuario |
 
-\| \`POST\` | \`/api/v1/users\` | Crear un usuario |
+| `POST` | `/api/v1/users` | Crear un usuario |
 
-\| \`PATCH\` | \`/api/v1/users/{user\_id}\` | Actualizar parcialmente un usuario |
+| `PATCH` | `/api/v1/users/{user_id}` | Actualizar parcialmente un usuario |
 
-\| \`DELETE\` | \`/api/v1/users/{user\_id}\` | Eliminar un usuario |
+| `DELETE` | `/api/v1/users/{user_id}` | Eliminar un usuario |
 
-El listado admite un límite validado entre \`1\` y \`100\`:
+El listado admite un límite validado entre `1` y `100`:
 
-\`\`\`http
+```http
 
 GET /api/v1/users?limit=10
 
-\`\`\`
+```
 
-**### Tasks**
+### Tasks
 
-\| Método | Endpoint | Descripción |
+| Método | Endpoint | Descripción |
 
-\| --- | --- | --- |
+| --- | --- | --- |
 
-\| \`POST\` | \`/api/v1/users/{user\_id}/tasks\` | Crear una tarea para un usuario |
+| `POST` | `/api/v1/users/{user_id}/tasks` | Crear una tarea para un usuario |
 
-\| \`GET\` | \`/api/v1/users/{user\_id}/tasks\` | Obtener las tareas de un usuario |
+| `GET` | `/api/v1/users/{user_id}/tasks` | Obtener las tareas de un usuario |
 
-\| \`GET\` | \`/api/v1/tasks/{task\_id}\` | Obtener una tarea por ID |
+| `GET` | `/api/v1/tasks/{task_id}` | Obtener una tarea por ID |
 
-\| \`PATCH\` | \`/api/v1/tasks/{task\_id}\` | Actualizar parcialmente una tarea |
+| `PATCH` | `/api/v1/tasks/{task_id}` | Actualizar parcialmente una tarea |
 
-\| \`DELETE\` | \`/api/v1/tasks/{task\_id}\` | Eliminar una tarea |
+| `DELETE` | `/api/v1/tasks/{task_id}` | Eliminar una tarea |
 
-El CRUD básico de \`Task\` está completo.
+El CRUD básico de `Task` está completo.
 
-Las actualizaciones mediante \`PATCH\` modifican únicamente los campos enviados por el cliente. Campos controlados por la aplicación como \`id\`, \`created\_at\` y \`user\_id\` no forman parte del esquema de actualización.
+Las actualizaciones mediante `PATCH` modifican únicamente los campos enviados por el cliente. Campos controlados por la aplicación como `id`, `created_at` y `user_id` no forman parte del esquema de actualización.
 
-**---**
+---
 
-**## Versionado de la API**
+## Versionado de la API
 
 Los endpoints de negocio se publican bajo un prefijo de versión:
 
-\`\`\`text
+```text
 
 /api/v1
 
-\`\`\`
+```
 
 Por ejemplo:
 
-\`\`\`text
+```text
 
 GET  /api/v1/users
 
 POST /api/v1/users
 
-GET  /api/v1/tasks/{task\_id}
+GET  /api/v1/tasks/{task_id}
 
-\`\`\`
+```
 
 El versionado permite evolucionar el contrato HTTP de la API sin introducir cambios incompatibles directamente sobre los endpoints existentes.
 
 Los endpoints operacionales:
 
-\`\`\`text
+```text
 
 /
 
 /health
 
-\`\`\`
+```
 
 permanecen fuera del prefijo de versión.
 
-La versión definida en \`FastAPI(version="0.1.0")\` representa la versión del software y no debe confundirse con la versión pública del contrato HTTP \`/api/v1\`.
+La versión definida en `FastAPI(version="0.1.0")` representa la versión del software y no debe confundirse con la versión pública del contrato HTTP `/api/v1`.
 
-**---**
+---
 
-**## Códigos HTTP relevantes**
+## Códigos HTTP relevantes
 
-\`\`\`text
+```text
 
 200 OK
 
@@ -672,25 +680,25 @@ La versión definida en \`FastAPI(version="0.1.0")\` representa la versión del 
 
     Los datos enviados no cumplen las validaciones esperadas.
 
-\`\`\`
+```
 
-Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve \`409 Conflict\`.
+Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`.
 
 PostgreSQL bloquea primero la eliminación mediante la clave foránea y la aplicación convierte el error de integridad en una respuesta HTTP comprensible.
 
-**---**
+---
 
-**## Contrato de errores**
+## Contrato de errores
 
 Los errores de la API utilizan una estructura uniforme:
 
-\`\`\`json
+```json
 
 {
 
   "error": {
 
-    "code": "USER\_NOT\_FOUND",
+    "code": "USER_NOT_FOUND",
 
     "message": "Usuario no encontrado",
 
@@ -700,49 +708,49 @@ Los errores de la API utilizan una estructura uniforme:
 
 }
 
-\`\`\`
+```
 
-**### Campos**
+### Campos
 
-\- \`code\`: código estable y procesable por clientes.
+- `code`: código estable y procesable por clientes.
 
-\- \`message\`: descripción legible del error.
+- `message`: descripción legible del error.
 
-\- \`details\`: información adicional cuando aplica.
+- `details`: información adicional cuando aplica.
 
-El código HTTP continúa indicando la categoría general del problema (\`404\`, \`405\`, \`409\`, \`422\`, etc.), mientras que \`error.code\` identifica el caso concreto de forma estable. Los clientes pueden tomar decisiones usando el código sin depender del texto de \`message\`.
+El código HTTP continúa indicando la categoría general del problema (`404`, `405`, `409`, `422`, etc.), mientras que `error.code` identifica el caso concreto de forma estable. Los clientes pueden tomar decisiones usando el código sin depender del texto de `message`.
 
 Actualmente se utilizan códigos como:
 
-\`\`\`text
+```text
 
-USER\_NOT\_FOUND
+USER_NOT_FOUND
 
-TASK\_NOT\_FOUND
+TASK_NOT_FOUND
 
-DUPLICATE\_EMAIL
+DUPLICATE_EMAIL
 
-USER\_HAS\_TASKS
+USER_HAS_TASKS
 
-VALIDATION\_ERROR
+VALIDATION_ERROR
 
-NOT\_FOUND
+NOT_FOUND
 
-METHOD\_NOT\_ALLOWED
+METHOD_NOT_ALLOWED
 
-HTTP\_ERROR
+HTTP_ERROR
 
-\`\`\`
+```
 
-Los errores de validación utilizan el código \`VALIDATION\_ERROR\` y pueden incluir detalles de los campos inválidos:
+Los errores de validación utilizan el código `VALIDATION_ERROR` y pueden incluir detalles de los campos inválidos:
 
-\`\`\`json
+```json
 
 {
 
   "error": {
 
-    "code": "VALIDATION\_ERROR",
+    "code": "VALIDATION_ERROR",
 
     "message": "Los datos enviados no son válidos",
 
@@ -754,7 +762,7 @@ Los errores de validación utilizan el código \`VALIDATION\_ERROR\` y pueden in
 
         "message": "valor inválido",
 
-        "type": "value\_error"
+        "type": "value_error"
 
       }
 
@@ -764,283 +772,322 @@ Los errores de validación utilizan el código \`VALIDATION\_ERROR\` y pueden in
 
 }
 
-\`\`\`
+```
 
-Los valores originales recibidos no se reflejan en los detalles de validación para evitar exponer potencialmente información sensible. Solo se publican \`field\`, \`message\` y \`type\`.
+Los valores originales recibidos no se reflejan en los detalles de validación para evitar exponer potencialmente información sensible. Solo se publican `field`, `message` y `type`.
 
-Los errores generados por el propio framework también utilizan este contrato. Por ejemplo, una ruta inexistente devuelve \`NOT\_FOUND\` y un método HTTP no permitido devuelve \`METHOD\_NOT\_ALLOWED\`.
+Los errores generados por el propio framework también utilizan este contrato. Por ejemplo, una ruta inexistente devuelve `NOT_FOUND` y un método HTTP no permitido devuelve `METHOD_NOT_ALLOWED`.
 
-En OpenAPI, las respuestas \`422\` de los endpoints bajo \`/api/v1\` se documentan mediante el modelo \`ErrorResponse\`.
+En OpenAPI, las respuestas `422` de los endpoints bajo `/api/v1` se documentan mediante el modelo `ErrorResponse`.
 
-**---**
+---
 
-**## Requisitos**
+## Requisitos
 
 Antes de ejecutar el proyecto necesitas:
 
-\- Python 3.11 o superior.
+- Python 3.11 o superior.
 
-\- PostgreSQL instalado y ejecutándose.
+- PostgreSQL instalado y ejecutándose.
 
-\- Git.
+- Git.
 
-\- \`uv\`.
+- `uv`.
 
 La versión mínima declarada por el proyecto es Python 3.11.
 
-**---**
+---
 
-**## Instalación**
+## Instalación
 
-**### 1. Clonar el repositorio**
+### 1. Clonar el repositorio
 
-\`\`\`bash
+```bash
 
-git clone https\://github.com/Omar2709/fastapi-rest-api.git
+git clone https://github.com/Omar2709/fastapi-rest-api.git
 
 cd fastapi-rest-api
 
-\`\`\`
+```
 
-**### 2. Verificar \`uv\`**
+### 2. Verificar `uv`
 
-\`\`\`bash
+```bash
 
 uv --version
 
-\`\`\`
+```
 
 En Windows puede instalarse mediante WinGet:
 
-\`\`\`powershell
+```powershell
 
 winget install --id=astral-sh.uv -e
 
-\`\`\`
+```
 
-**### 3. Instalar y sincronizar dependencias**
+### 3. Instalar y sincronizar dependencias
 
 Desde la raíz del proyecto:
 
-\`\`\`bash
+```bash
 
 uv sync
 
-\`\`\`
+```
 
-\`uv\` utiliza \`pyproject.toml\` y \`uv.lock\` para crear y sincronizar automáticamente el entorno virtual \`.venv\`.
+`uv` utiliza `pyproject.toml` y `uv.lock` para crear y sincronizar automáticamente el entorno virtual `.venv`.
 
-No es necesario crear manualmente el entorno con \`python -m venv\` ni mantener un \`requirements.txt\` como fuente principal de dependencias.
+No es necesario crear manualmente el entorno con `python -m venv` ni mantener un `requirements.txt` como fuente principal de dependencias.
 
-**### 4. Ejecutar comandos dentro del entorno**
+### 4. Ejecutar comandos dentro del entorno
 
-No es necesario activar manualmente \`.venv\` si se utiliza \`uv run\`:
+No es necesario activar manualmente `.venv` si se utiliza `uv run`:
 
-\`\`\`bash
+```bash
 
 uv run python --version
 
-\`\`\`
+```
 
-**---**
+---
 
-**## Gestión de dependencias con uv**
+## Gestión de dependencias con uv
 
-**### Agregar una dependencia de runtime**
+### Agregar una dependencia de runtime
 
-\`\`\`bash
+```bash
 
 uv add nombre-paquete
 
-\`\`\`
+```
 
 Ejemplo:
 
-\`\`\`bash
+```bash
 
 uv add redis
 
-\`\`\`
+```
 
-**### Agregar una dependencia de desarrollo**
+### Agregar una dependencia de desarrollo
 
-\`\`\`bash
+```bash
 
 uv add --dev nombre-paquete
 
-\`\`\`
+```
 
 Ejemplo:
 
-\`\`\`bash
+```bash
 
 uv add --dev ruff
 
-\`\`\`
+```
 
-**### Eliminar una dependencia**
+### Eliminar una dependencia
 
-\`\`\`bash
+```bash
 
 uv remove nombre-paquete
 
-\`\`\`
+```
 
-**### Sincronizar el entorno**
+### Sincronizar el entorno
 
-\`\`\`bash
+```bash
 
 uv sync
 
-\`\`\`
+```
 
-**### Ver el árbol de dependencias**
+### Ver el árbol de dependencias
 
-\`\`\`bash
+```bash
 
 uv tree
 
-\`\`\`
+```
 
-**### Ejecutar comandos del proyecto**
+### Ejecutar comandos del proyecto
 
-\`\`\`bash
+```bash
 
-uv run \<comando>
+uv run <comando>
 
-\`\`\`
-
-Ejemplo:
-
-\`\`\`bash
-
-uv run uvicorn app.main\:app --reload
-
-\`\`\`
-
-Las dependencias directas deben declararse mediante \`pyproject.toml\`. No se deben agregar manualmente como dependencias directas paquetes transitivos requeridos únicamente por otras librerías.
-
-**---**
-
-**## Configuración**
-
-Crea tu archivo \`.env\` tomando \`.env.example\` como referencia.
+```
 
 Ejemplo:
 
-\`\`\`env
+```bash
 
-DB\_HOST=localhost
+uv run uvicorn app.main:app --reload
 
-DB\_PORT=5432
+```
 
-DB\_NAME=fastapi\_learning
+Las dependencias directas deben declararse mediante `pyproject.toml`. No se deben agregar manualmente como dependencias directas paquetes transitivos requeridos únicamente por otras librerías.
 
-DB\_USER=your\_database\_user
+---
 
-DB\_PASSWORD=your\_database\_password
+## Configuración
 
-\`\`\`
+Crea tu archivo `.env` tomando `.env.example` como referencia.
+
+Ejemplo:
+
+```env
+
+DB_HOST=localhost
+
+DB_PORT=5432
+
+DB_NAME=fastapi_learning
+
+DB_USER=your_database_user
+
+DB_PASSWORD=your_database_password
+
+```
 
 Nunca subas contraseñas reales, tokens o secretos al repositorio.
 
-El archivo \`.env\` debe permanecer ignorado por Git.
+El archivo `.env` debe permanecer ignorado por Git.
 
-**---**
+---
 
-**## Base de datos**
+## Provisionamiento de API Keys
+
+Las API Keys se crean inicialmente mediante una herramienta administrativa local.
+
+No existe un endpoint público sin autenticación para crear credenciales.
+
+### Configuración
+
+La aplicación requiere:
+
+```env
+API_KEY_PEPPER=<secret>
+```
+
+El pepper debe generarse mediante una fuente criptográficamente segura y nunca debe versionarse.
+
+La API Key completa tampoco se almacena en PostgreSQL. La base de datos conserva únicamente su identificador público y un digest HMAC utilizado para verificarla.
+
+### Provisionar una API Key
+
+```bash
+uv run python -m scripts.provision_api_key \
+--user-id 1 \
+--name "Local development"
+```
+
+También puede establecerse una expiración:
+
+```bash
+uv run python -m scripts.provision_api_key \
+--user-id 1 \
+--name "Temporary integration" \
+--expires-in-days 90
+```
+
+La credencial completa se muestra únicamente durante el provisionamiento y debe tratarse como un secreto.
+
+---
+
+## Base de datos
 
 La base de datos utilizada durante el desarrollo es, por defecto:
 
-\`\`\`text
+```text
 
-fastapi\_learning
+fastapi_learning
 
-\`\`\`
+```
 
 Puedes crearla con PostgreSQL:
 
-\`\`\`bash
+```bash
 
-createdb fastapi\_learning
+createdb fastapi_learning
 
-\`\`\`
+```
 
 Dependiendo de la configuración local puede ser necesario indicar un usuario:
 
-\`\`\`bash
+```bash
 
-createdb -U postgres fastapi\_learning
+createdb -U postgres fastapi_learning
 
-\`\`\`
+```
 
-También puede crearse desde \`psql\`:
+También puede crearse desde `psql`:
 
-\`\`\`sql
+```sql
 
-CREATE DATABASE fastapi\_learning;
+CREATE DATABASE fastapi_learning;
 
-\`\`\`
+```
 
-**---**
+---
 
-**## Migraciones con Alembic**
+## Migraciones con Alembic
 
-El esquema de la base de datos se administra mediante Alembic y todos los comandos se ejecutan dentro del entorno gestionado por \`uv\`.
+El esquema de la base de datos se administra mediante Alembic y todos los comandos se ejecutan dentro del entorno gestionado por `uv`.
 
-**### Ver la versión actual**
+### Ver la versión actual
 
-\`\`\`bash
+```bash
 
 uv run alembic current
 
-\`\`\`
+```
 
-**### Ver las cabezas de migración**
+### Ver las cabezas de migración
 
-\`\`\`bash
+```bash
 
 uv run alembic heads
 
-\`\`\`
+```
 
-**### Ver el historial**
+### Ver el historial
 
-\`\`\`bash
+```bash
 
 uv run alembic history
 
-\`\`\`
+```
 
-**### Aplicar migraciones pendientes**
+### Aplicar migraciones pendientes
 
-\`\`\`bash
+```bash
 
 uv run alembic upgrade head
 
-\`\`\`
+```
 
-**### Crear una migración automáticamente**
+### Crear una migración automáticamente
 
 Después de modificar los modelos SQLAlchemy:
 
-\`\`\`bash
+```bash
 
 uv run alembic revision --autogenerate -m "descripcion del cambio"
 
-\`\`\`
+```
 
 El archivo generado debe revisarse manualmente antes de aplicar la migración:
 
-\`\`\`bash
+```bash
 
 uv run alembic upgrade head
 
-\`\`\`
+```
 
-**### Regla del proyecto**
+### Regla del proyecto
 
-\`\`\`text
+```text
 
 Cambio en endpoints        -> no requiere migración
 
@@ -1056,45 +1103,45 @@ Nueva foreign key          -> requiere migración
 
 Cambio del esquema SQL     -> requiere migración
 
-\`\`\`
+```
 
-**---**
+---
 
-**## Ejecutar la API**
+## Ejecutar la API
 
 Desde la raíz del proyecto:
 
-\`\`\`bash
+```bash
 
-uv run uvicorn app.main\:app --reload
+uv run uvicorn app.main:app --reload
 
-\`\`\`
+```
 
 Resultado esperado:
 
-\`\`\`text
+```text
 
-Uvicorn running on http\://127.0.0.1:8000
+Uvicorn running on http://127.0.0.1:8000
 
-\`\`\`
+```
 
-**### Documentación interactiva**
+### Documentación interactiva
 
 Con la API ejecutándose:
 
-\- Swagger UI: \`http\://127.0.0.1:8000/docs\`
+- Swagger UI: `http://127.0.0.1:8000/docs`
 
-\- ReDoc: \`http\://127.0.0.1:8000/redoc\`
+- ReDoc: `http://127.0.0.1:8000/redoc`
 
 Swagger permite probar directamente los endpoints desde el navegador.
 
-**---**
+---
 
-**## Ejemplos**
+## Ejemplos
 
-**### Crear un usuario**
+### Crear un usuario
 
-\`\`\`http
+```http
 
 POST /api/v1/users
 
@@ -1104,15 +1151,15 @@ Content-Type: application/json
 
   "name": "Ana",
 
-  "email": "ana\@example.com"
+  "email": "ana@example.com"
 
 }
 
-\`\`\`
+```
 
 Respuesta aproximada:
 
-\`\`\`json
+```json
 
 {
 
@@ -1120,19 +1167,19 @@ Respuesta aproximada:
 
   "name": "Ana",
 
-  "email": "ana\@example.com",
+  "email": "ana@example.com",
 
-  "created\_at": "2026-01-01T12:00:00Z",
+  "created_at": "2026-01-01T12:00:00Z",
 
-  "is\_active": true
+  "is_active": true
 
 }
 
-\`\`\`
+```
 
-**### Actualizar parcialmente un usuario**
+### Actualizar parcialmente un usuario
 
-\`\`\`http
+```http
 
 PATCH /api/v1/users/1
 
@@ -1140,17 +1187,17 @@ Content-Type: application/json
 
 {
 
-  "is\_active": false
+  "is_active": false
 
 }
 
-\`\`\`
+```
 
 Solo los campos enviados son modificados.
 
-**### Crear una tarea**
+### Crear una tarea
 
-\`\`\`http
+```http
 
 POST /api/v1/users/1/tasks
 
@@ -1164,11 +1211,11 @@ Content-Type: application/json
 
 }
 
-\`\`\`
+```
 
-**### Actualizar parcialmente una tarea**
+### Actualizar parcialmente una tarea
 
-\`\`\`http
+```http
 
 PATCH /api/v1/tasks/1
 
@@ -1176,15 +1223,15 @@ Content-Type: application/json
 
 {
 
-  "is\_completed": true
+  "is_completed": true
 
 }
 
-\`\`\`
+```
 
-También es posible enviar explícitamente \`null\` en campos opcionales:
+También es posible enviar explícitamente `null` en campos opcionales:
 
-\`\`\`json
+```json
 
 {
 
@@ -1192,29 +1239,29 @@ También es posible enviar explícitamente \`null\` en campos opcionales:
 
 }
 
-\`\`\`
+```
 
 Esto permite eliminar la descripción sin modificar el resto de campos.
 
-**### Eliminar una tarea**
+### Eliminar una tarea
 
-\`\`\`http
+```http
 
 DELETE /api/v1/tasks/1
 
-\`\`\`
+```
 
-Si la tarea existe, la API responde con \`204 No Content\`. Si no existe, devuelve \`404 Not Found\`.
+Si la tarea existe, la API responde con `204 No Content`. Si no existe, devuelve `404 Not Found`.
 
-**---**
+---
 
-**## Validación de datos**
+## Validación de datos
 
 Pydantic se utiliza para validar los datos que entran y salen de la API.
 
 Actualmente existen esquemas como:
 
-\`\`\`text
+```text
 
 UserCreate
 
@@ -1228,15 +1275,15 @@ TaskUpdate
 
 TaskResponse
 
-\`\`\`
+```
 
 Esta separación permite controlar qué campos puede enviar un cliente y qué campos puede devolver la aplicación.
 
-Para actualizaciones parciales se utilizan únicamente los campos enviados realmente por el cliente mediante \`model\_dump(exclude\_unset=True)\`.
+Para actualizaciones parciales se utilizan únicamente los campos enviados realmente por el cliente mediante `model_dump(exclude_unset=True)`.
 
 Conceptualmente:
 
-\`\`\`text
+```text
 
 JSON
 
@@ -1264,97 +1311,99 @@ SQLAlchemy Model
 
 PostgreSQL
 
-\`\`\`
+```
 
-**---**
+---
 
-**## Testing**
+## Testing
 
-El proyecto utiliza **\*\*pytest\*\*** y **\*\*FastAPI TestClient\*\*** para validar el comportamiento de la API.
+El proyecto utiliza **pytest** y **FastAPI TestClient** para validar el comportamiento de la API.
 
 La suite contiene pruebas para los endpoints generales, usuarios y tareas:
 
-\`\`\`text
+```text
 
 tests/
 
 ├── conftest.py
 
-├── test\_main.py
+├── test_main.py
 
-├── test\_users.py
+├── test_users.py
 
-└── test\_tasks.py
+└── test_tasks.py
 
-\`\`\`
+```
 
-**### Base de datos de testing**
+### Base de datos de testing
 
-Las pruebas no utilizan la base de datos normal de desarrollo. A partir de \`DB\_NAME\`, la configuración de tests utiliza una base separada con sufijo \`\_test\`.
+Las pruebas no utilizan la base de datos normal de desarrollo. A partir de `DB_NAME`, la configuración de tests utiliza una base separada con sufijo `_test`.
 
-Por ejemplo, si el \`.env\` contiene:
+Por ejemplo, si el `.env` contiene:
 
-\`\`\`env
+```env
 
-DB\_NAME=fastapi\_learning
+DB_NAME=fastapi_learning
 
-\`\`\`
+```
 
 la suite utiliza:
 
-\`\`\`text
+```text
 
-fastapi\_learning\_test
+fastapi_learning_test
 
-\`\`\`
+```
 
 La base debe existir en PostgreSQL antes de ejecutar la suite. Puede crearse con:
 
-\`\`\`bash
+```bash
 
-createdb fastapi\_learning\_test
+createdb fastapi_learning_test
 
-\`\`\`
+```
 
-Las fixtures crean las tablas necesarias para la sesión de tests, limpian los datos entre pruebas y sobrescriben temporalmente la dependencia \`get\_db\` de FastAPI para utilizar la sesión de testing.
+Las fixtures crean las tablas necesarias para la sesión de tests, limpian los datos entre pruebas y sobrescriben temporalmente la dependencia `get_db` de FastAPI para utilizar la sesión de testing.
 
-**### Ejecutar todos los tests**
+### Ejecutar todos los tests
 
-\`\`\`bash
+```bash
 
 uv run pytest
 
-\`\`\`
+```
 
-**### Ejecutar un archivo concreto**
+### Ejecutar un archivo concreto
 
-\`\`\`bash
+```bash
 
-uv run pytest tests/test\_users.py
+uv run pytest tests/test_users.py
 
-\`\`\`
+```
 
-**### Ejecutar un test concreto**
+### Ejecutar un test concreto
 
-\`\`\`bash
+```bash
 
-uv run pytest tests/test\_users.py::nombre\_del\_test
+uv run pytest tests/test_users.py::nombre_del_test
 
-\`\`\`
+```
 
 
 
-**---**
 
-**## Cobertura de tests**
 
-El proyecto utiliza \`pytest-cov\` para medir la cobertura del código de aplicación.
+---
 
-La medición incluye cobertura de líneas y ramas sobre el paquete \`app\`.
+## Cobertura de tests
 
-La configuración se mantiene en \`pyproject.toml\`:
+El proyecto utiliza `pytest-cov` para medir la cobertura del código de aplicación.
 
-\`\`\`toml
+La medición incluye cobertura de líneas y ramas sobre el paquete `app`.
+
+La configuración se mantiene en `pyproject.toml`:
+
+```toml
 
 [tool.coverage.run]
 
@@ -1364,63 +1413,63 @@ source = ["app"]
 
 [tool.coverage.report]
 
-show\_missing = true
+show_missing = true
 
 precision = 2
 
-fail\_under = 90
+fail_under = 90
 
 [tool.coverage.html]
 
 directory = "htmlcov"
 
-\`\`\`
+```
 
-**### Ejecutar tests con cobertura**
+### Ejecutar tests con cobertura
 
-\`\`\`bash
+```bash
 
 uv run pytest --cov=app --cov-report=term-missing
 
-\`\`\`
+```
 
-El proyecto mantiene actualmente un umbral mínimo de cobertura del **\*\*90%\*\***.
+El proyecto mantiene actualmente un umbral mínimo de cobertura del **90%**.
 
 Si la cobertura total cae por debajo de ese porcentaje, el comando finaliza con error aunque los tests funcionales hayan pasado. De esta forma, la cobertura actúa como un quality gate independiente.
 
-**### Generar reporte HTML**
+### Generar reporte HTML
 
-\`\`\`bash
+```bash
 
 uv run pytest --cov=app --cov-report=html
 
-\`\`\`
+```
 
 El reporte se genera en:
 
-\`\`\`text
+```text
 
 htmlcov/index.html
 
-\`\`\`
+```
 
-Los archivos generados por Coverage no forman parte del código fuente y están excluidos mediante \`.gitignore\`:
+Los archivos generados por Coverage no forman parte del código fuente y están excluidos mediante `.gitignore`:
 
-\`\`\`text
+```text
 
 .coverage
 
-.coverage.\*
+.coverage.*
 
 htmlcov/
 
-\`\`\`
+```
 
-**### Quality gate local**
+### Quality gate local
 
 Antes de realizar un commit importante:
 
-\`\`\`bash
+```bash
 
 uv run ruff check .
 
@@ -1428,73 +1477,73 @@ uv run ruff format --check .
 
 uv run pytest --cov=app --cov-report=term-missing
 
-\`\`\`
+```
 
 El último comando ejecuta la suite de tests, mide cobertura de líneas y ramas y comprueba que se mantiene el umbral mínimo configurado.
 
 Actualmente el proyecto mantiene una cobertura superior al umbral mínimo establecido. El porcentaje exacto no se fija en el README porque evoluciona con el código.
 
-**---**
+---
 
-**## Calidad de código**
+## Calidad de código
 
-El proyecto utiliza **\*\*Ruff\*\*** como herramienta de linting y formateo.
+El proyecto utiliza **Ruff** como herramienta de linting y formateo.
 
-Ruff está configurado en \`pyproject.toml\` tomando **\*\*Python 3.11\*\*** como versión mínima objetivo, en línea con \`requires-python = ">=3.11"\`.
+Ruff está configurado en `pyproject.toml` tomando **Python 3.11** como versión mínima objetivo, en línea con `requires-python = ">=3.11"`.
 
 La configuración activa reglas orientadas a:
 
-\- errores importantes de \`pycodestyle\` (\`E4\`, \`E7\`, \`E9\`);
+- errores importantes de `pycodestyle` (`E4`, `E7`, `E9`);
 
-\- errores detectados por Pyflakes (\`F\`);
+- errores detectados por Pyflakes (`F`);
 
-\- orden de imports (\`I\`);
+- orden de imports (`I`);
 
-\- modernización compatible con Python 3.11+ (\`UP\`);
+- modernización compatible con Python 3.11+ (`UP`);
 
-\- patrones propensos a bugs (\`B\`);
+- patrones propensos a bugs (`B`);
 
-\- simplificación de código (\`SIM\`).
+- simplificación de código (`SIM`).
 
 El formatter utiliza una longitud de línea de referencia de 88 caracteres, comillas dobles e indentación con espacios.
 
-**### Comprobar problemas de código**
+### Comprobar problemas de código
 
-\`\`\`bash
+```bash
 
 uv run ruff check .
 
-\`\`\`
+```
 
-**### Aplicar correcciones automáticas**
+### Aplicar correcciones automáticas
 
-\`\`\`bash
+```bash
 
 uv run ruff check . --fix
 
-\`\`\`
+```
 
-**### Comprobar el formato sin modificar archivos**
+### Comprobar el formato sin modificar archivos
 
-\`\`\`bash
+```bash
 
 uv run ruff format --check .
 
-\`\`\`
+```
 
-**### Aplicar formato**
+### Aplicar formato
 
-\`\`\`bash
+```bash
 
 uv run ruff format .
 
-\`\`\`
+```
 
-**### Control de calidad local**
+### Control de calidad local
 
 Antes de realizar un commit importante se debe comprobar:
 
-\`\`\`bash
+```bash
 
 uv run ruff check .
 
@@ -1502,11 +1551,11 @@ uv run ruff format --check .
 
 uv run pytest --cov=app --cov-report=term-missing
 
-\`\`\`
+```
 
 El resultado esperado es conceptualmente:
 
-\`\`\`text
+```text
 
 Ruff lint       ✅
 
@@ -1514,69 +1563,69 @@ Ruff format     ✅
 
 Tests           ✅
 
-\`\`\`
+```
 
-Este conjunto de comandos define el **\*\*contrato de calidad local\*\*** del proyecto.
+Este conjunto de comandos define el **contrato de calidad local** del proyecto.
 
 Más adelante GitHub Actions ejecutará las mismas comprobaciones en integración continua para reducir diferencias entre el entorno local y CI.
 
-**---**
+---
 
-**## Seguridad y buenas prácticas actuales**
+## Seguridad y buenas prácticas actuales
 
 El proyecto aplica actualmente las siguientes prácticas:
 
-\- Variables sensibles fuera del código mediante \`.env\`.
+- Variables sensibles fuera del código mediante `.env`.
 
-\- \`.env\` ignorado por Git.
+- `.env` ignorado por Git.
 
-\- Validación de request bodies con Pydantic.
+- Validación de request bodies con Pydantic.
 
-\- Restricciones también a nivel PostgreSQL.
+- Restricciones también a nivel PostgreSQL.
 
-\- Emails únicos mediante una constraint \`UNIQUE\`.
+- Emails únicos mediante una constraint `UNIQUE`.
 
-\- Foreign keys para garantizar integridad referencial.
+- Foreign keys para garantizar integridad referencial.
 
-\- \`rollback()\` después de errores de transacción.
+- `rollback()` después de errores de transacción.
 
-\- Modelos de entrada y salida separados.
+- Modelos de entrada y salida separados.
 
-\- Campos modificables controlados mediante schemas específicos.
+- Campos modificables controlados mediante schemas específicos.
 
-\- Contrato uniforme para errores \`404\`, \`405\`, \`409\` y \`422\` mediante códigos estables.
+- Contrato uniforme para errores `404`, `405`, `409` y `422` mediante códigos estables.
 
-\- Migraciones de base de datos versionadas.
+- Migraciones de base de datos versionadas.
 
-\- Separación entre routers y services.
+- Separación entre routers y services.
 
-\- Dependencias directas declaradas explícitamente.
+- Dependencias directas declaradas explícitamente.
 
-\- Versiones reproducibles mediante \`uv.lock\`.
+- Versiones reproducibles mediante `uv.lock`.
 
-\- Tests de API mediante \`pytest\` y \`TestClient\`.
+- Tests de API mediante `pytest` y `TestClient`.
 
-\- Base de datos separada para testing.
+- Base de datos separada para testing.
 
-\- Linting y formateo automatizados con Ruff.
+- Linting y formateo automatizados con Ruff.
 
-\- Control de calidad local antes de commits importantes.
+- Control de calidad local antes de commits importantes.
 
-\- Cobertura de líneas y ramas mediante \`pytest-cov\` con quality gate mínimo del 90%.
+- Cobertura de líneas y ramas mediante `pytest-cov` con quality gate mínimo del 90%.
 
-\- Historial de cambios siguiendo Conventional Commits.
+- Historial de cambios siguiendo Conventional Commits.
 
-\- Los errores de validación no reflejan el valor original recibido.
+- Los errores de validación no reflejan el valor original recibido.
 
 Todavía faltan mecanismos importantes como autenticación mediante API Keys, autorización por scopes, rate limiting, observabilidad y automatización mediante CI.
 
-**---**
+---
 
-**## Flujo de desarrollo**
+## Flujo de desarrollo
 
 El desarrollo se organiza en bloques funcionales. Después de completar y comprobar cada bloque se realiza un commit independiente.
 
-\`\`\`text
+```text
 
 Bloque funcional
 
@@ -1616,11 +1665,11 @@ Conventional Commit
 
 Push
 
-\`\`\`
+```
 
 Antes de realizar un commit importante:
 
-\`\`\`bash
+```bash
 
 uv run ruff check .
 
@@ -1632,35 +1681,35 @@ git status
 
 git diff
 
-\`\`\`
+```
 
 Después:
 
-\`\`\`bash
+```bash
 
-git add \<archivos>
+git add <archivos>
 
 git commit -m "type(scope): short description"
 
 git push
 
-\`\`\`
+```
 
-**### Convención de commits**
+### Convención de commits
 
-El proyecto utiliza **\*\*Conventional Commits\*\***.
+El proyecto utiliza **Conventional Commits**.
 
 Formato:
 
-\`\`\`text
+```text
 
 type(scope): description
 
-\`\`\`
+```
 
 Ejemplos:
 
-\`\`\`text
+```text
 
 feat(api): add v1 versioning
 
@@ -1672,13 +1721,13 @@ docs: update project documentation
 
 ci: run quality checks in GitHub Actions
 
-\`\`\`
+```
 
 Los scopes son opcionales y se utilizan cuando ayudan a identificar el área afectada.
 
 Los tipos utilizados habitualmente son:
 
-\`\`\`text
+```text
 
 feat      nueva funcionalidad o capacidad
 
@@ -1700,218 +1749,222 @@ build     dependencias, packaging o build
 
 style     cambios de formato sin alterar lógica
 
-\`\`\`
+```
 
 El tipo representa el propósito principal del commit. Los tests y la documentación que acompañan a una nueva funcionalidad no requieren tipos adicionales en el mismo mensaje.
 
-Las descripciones se escriben en inglés y en minúsculas después de \`:\`.
+Las descripciones se escriben en inglés y en minúsculas después de `:`.
 
-Los cambios incompatibles pueden marcarse con \`!\`:
+Los cambios incompatibles pueden marcarse con `!`:
 
-\`\`\`text
+```text
 
 feat(api)!: change job response schema
 
-\`\`\`
+```
 
-Cuando sea necesario, el cuerpo del commit puede documentar explícitamente el cambio incompatible mediante \`BREAKING CHANGE:\`.
+Cuando sea necesario, el cuerpo del commit puede documentar explícitamente el cambio incompatible mediante `BREAKING CHANGE:`.
 
-Las migraciones de Alembic, \`pyproject.toml\` y \`uv.lock\` forman parte del código fuente y deben versionarse cuando correspondan.
+Las migraciones de Alembic, `pyproject.toml` y `uv.lock` forman parte del código fuente y deben versionarse cuando correspondan.
 
-Nunca debe incluirse \`.env\`.
+Nunca debe incluirse `.env`.
 
-**---**
+---
 
-**## Estado actual**
+## Estado actual
 
-**### Implementado**
+### Implementado
 
-\- [x] Proyecto Python.
+- [x] Proyecto Python.
 
-\- [x] FastAPI.
+- [x] FastAPI.
 
-\- [x] Uvicorn.
+- [x] Uvicorn.
 
-\- [x] Documentación OpenAPI / Swagger.
+- [x] Documentación OpenAPI / Swagger.
 
-\- [x] Validación con Pydantic.
+- [x] Validación con Pydantic.
 
-\- [x] PostgreSQL.
+- [x] PostgreSQL.
 
-\- [x] SQLAlchemy ORM.
+- [x] SQLAlchemy ORM.
 
-\- [x] Psycopg 3.
+- [x] Psycopg 3.
 
-\- [x] Configuración mediante \`.env\`.
+- [x] Configuración mediante `.env`.
 
-\- [x] CRUD de usuarios.
+- [x] CRUD de usuarios.
 
-\- [x] CRUD de tareas.
+- [x] CRUD de tareas.
 
-\- [x] Actualizaciones parciales con \`PATCH\`.
+- [x] Actualizaciones parciales con `PATCH`.
 
-\- [x] Manejo de errores \`404\`, \`405\`, \`409\` y \`422\`.
+- [x] Manejo de errores `404`, `405`, `409` y `422`.
 
-\- [x] Alembic y migraciones.
+- [x] Alembic y migraciones.
 
-\- [x] Arquitectura con routers y services.
+- [x] Arquitectura con routers y services.
 
-\- [x] Relación \`User 1\:N Task\`.
+- [x] Relación `User 1:N Task`.
 
-\- [x] Foreign keys e integridad referencial.
+- [x] Foreign keys e integridad referencial.
 
-\- [x] Gestión de dependencias con \`uv\`.
+- [x] Gestión de dependencias con `uv`.
 
-\- [x] \`pyproject.toml\`.
+- [x] `pyproject.toml`.
 
-\- [x] Lockfile reproducible con \`uv.lock\`.
+- [x] Lockfile reproducible con `uv.lock`.
 
-\- [x] Entorno virtual gestionado mediante \`uv\`.
+- [x] Entorno virtual gestionado mediante `uv`.
 
-\- [x] Tests automatizados con \`pytest\`.
+- [x] Tests automatizados con `pytest`.
 
-\- [x] Pruebas HTTP mediante \`TestClient\`.
+- [x] Pruebas HTTP mediante `TestClient`.
 
-\- [x] Base de datos separada para testing.
+- [x] Base de datos separada para testing.
 
-\- [x] Fixtures para aislamiento de tests.
+- [x] Fixtures para aislamiento de tests.
 
-\- [x] Ruff para linting y formateo.
+- [x] Ruff para linting y formateo.
 
-\- [x] Control de calidad local antes de commits.
+- [x] Control de calidad local antes de commits.
 
-\- [x] Versionado de la API bajo \`/api/v1\`.
+- [x] Versionado de la API bajo `/api/v1`.
 
-\- [x] Contrato uniforme de respuestas de error.
+- [x] Contrato uniforme de respuestas de error.
 
-\- [x] Manejadores globales para errores HTTP y validación.
+- [x] Manejadores globales para errores HTTP y validación.
 
-\- [x] Respuestas \`422\` documentadas en OpenAPI mediante \`ErrorResponse\`.
+- [x] Respuestas `422` documentadas en OpenAPI mediante `ErrorResponse`.
 
-\- [x] Medición de cobertura mediante \`pytest-cov\`.
+- [x] Medición de cobertura mediante `pytest-cov`.
 
-\- [x] Cobertura de líneas y branches.
+- [x] Cobertura de líneas y branches.
 
-\- [x] Quality gate mínimo de cobertura del 90%.
+- [x] Quality gate mínimo de cobertura del 90%.
 
-\- [x] Artefactos locales de Coverage excluidos mediante \`.gitignore\`.
+- [x] Artefactos locales de Coverage excluidos mediante `.gitignore`.
 
-\- [x] Convención de commits mediante Conventional Commits.
+- [x] Convención de commits mediante Conventional Commits.
 
-\- [x] Fundamentos criptográficos para API Keys.
+- [x] Fundamentos criptográficos para API Keys.
 
-\- [x] Modelo persistente de API Keys.
+- [x] Modelo persistente de API Keys.
 
-\- [x] Relación \`User 1\:N ApiKey\`.
+- [x] Relación `User 1:N ApiKey`.
 
-\- [x] Constraints e índices para API Keys.
+- [x] Constraints e índices para API Keys.
 
-\- [x] Migración de la tabla \`api_keys\`.
+- [x] Migración de la tabla `api_keys`.
 
-**### Próximos pasos**
+- [x] Pepper de servidor para API Keys.
 
+- [x] Servicio de provisionamiento de API Keys.
 
+- [x] Reintentos defensivos ante colisiones de `key_id`.
 
-\- [ ] Integrar Ruff y pytest en GitHub Actions.
+- [x] Provisionamiento administrativo sin endpoint público.
 
-\- [ ] Implementar autenticación mediante API Keys.
+### Próximos pasos
 
-\- [ ] Añadir scopes y revocación de API Keys.
 
-\- [ ] Introducir el dominio de procesamiento de Jobs.
 
-\- [ ] Implementar estados y transiciones de Jobs.
 
-\- [ ] Implementar idempotencia en creación de Jobs.
 
-\- [ ] Introducir Transactional Outbox.
+- [ ] Integrar Ruff y pytest en GitHub Actions.
 
-\- [ ] Integrar AWS SQS.
+- [ ] Implementar autenticación mediante API Keys.
 
-\- [ ] Implementar workers y estrategia de reintentos.
+- [ ] Añadir scopes y revocación de API Keys.
 
-\- [ ] Añadir Dead Letter Queue.
+- [ ] Introducir el dominio de procesamiento de Jobs.
 
-\- [ ] Implementar webhooks firmados con HMAC.
+- [ ] Implementar estados y transiciones de Jobs.
 
-\- [ ] Añadir retry y backoff para webhooks.
+- [ ] Implementar idempotencia en creación de Jobs.
 
-\- [ ] Implementar rate limiting.
+- [ ] Introducir Transactional Outbox.
 
-\- [ ] Añadir logging estructurado y correlation IDs.
+- [ ] Integrar AWS SQS.
 
-\- [ ] Añadir métricas y observabilidad.
+- [ ] Implementar workers y estrategia de reintentos.
 
-\- [ ] Dockerizar los componentes del sistema.
+- [ ] Añadir Dead Letter Queue.
 
-\- [ ] Preparar despliegue y CI/CD en AWS.
+- [ ] Implementar webhooks firmados con HMAC.
 
-**---**
+- [ ] Añadir retry y backoff para webhooks.
 
-**## Filosofía del proyecto**
+- [ ] Implementar rate limiting.
+
+- [ ] Añadir logging estructurado y correlation IDs.
+
+- [ ] Añadir métricas y observabilidad.
+
+- [ ] Dockerizar los componentes del sistema.
+
+- [ ] Preparar despliegue y CI/CD en AWS.
+
+---
+
+## Filosofía del proyecto
 
 Este proyecto intenta evitar utilizar las herramientas como cajas negras. La intención es comprender qué sucede en cada capa y qué problema resuelve cada abstracción.
 
 Por ejemplo:
 
-\`\`\`python
-
+```python
 db.get(User, 1)
-
-\`\`\`
+```
 
 representa conceptualmente una operación similar a:
 
-\`\`\`sql
+```sql
 
-SELECT \*
+SELECT *
 
 FROM users
 
 WHERE id = 1;
 
-\`\`\`
+```
 
 Y:
 
-\`\`\`python
-
+```python
 db.delete(user)
 
 db.commit()
-
-\`\`\`
+```
 
 termina produciendo conceptualmente:
 
-\`\`\`sql
+```sql
 
 DELETE FROM users
 
 WHERE id = 1;
 
-\`\`\`
+```
 
 De forma similar:
 
-\`\`\`python
-
-task\_data.model\_dump(exclude\_unset=True)
-
-\`\`\`
+```python
+task_data.model_dump(exclude_unset=True)
+```
 
 permite distinguir los campos enviados realmente durante una actualización parcial.
 
-SQLAlchemy, Pydantic, FastAPI, pytest, Ruff y \`uv\` simplifican distintas partes del desarrollo, pero el objetivo es comprender qué sucede detrás de cada operación.
+SQLAlchemy, Pydantic, FastAPI, pytest, Ruff y `uv` simplifican distintas partes del desarrollo, pero el objetivo es comprender qué sucede detrás de cada operación.
 
-**---**
+---
 
-**## Licencia**
+## Licencia
 
 Por definir.
 
-**---**
+---
 
-**## Nota**
+## Nota
 
-Este repositorio forma parte de un proyecto de aprendizaje y evoluciona progresivamente. Algunas decisiones arquitectónicas pueden cambiar a medida que se incorporen nuevos conceptos y necesidades.
+Este repositorio forma parte de un proyecto de aprendizaje y evoluciona progresivamente. Algunas decisiones arquitectónicas pueden cambiar a medida que se i
