@@ -1,17 +1,24 @@
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import ApiKey, User
 from app.security.api_keys import (
+    InvalidAPIKeyFormatError,
     create_api_key_digest,
+    extract_api_key_id,
     generate_api_key,
+    verify_api_key,
 )
 
 API_KEY_ID_UNIQUE_CONSTRAINT = "api_keys_key_id_key"
 MAX_API_KEY_GENERATION_ATTEMPTS = 3
+DUMMY_API_KEY_DIGEST = "0" * 64
+
+LAST_USED_UPDATE_INTERVAL = timedelta(minutes=5)
 
 
 class APIKeyOwnerNotFoundError(LookupError):
@@ -27,6 +34,26 @@ class InvalidAPIKeyExpirationError(ValueError):
 
 
 class APIKeyGenerationError(RuntimeError):
+    pass
+
+
+class APIKeyAuthenticationError(Exception):
+    pass
+
+
+class InvalidAPIKeyError(APIKeyAuthenticationError):
+    pass
+
+
+class RevokedAPIKeyError(APIKeyAuthenticationError):
+    pass
+
+
+class ExpiredAPIKeyError(APIKeyAuthenticationError):
+    pass
+
+
+class InactiveAPIKeyOwnerError(APIKeyAuthenticationError):
     pass
 
 
@@ -133,3 +160,68 @@ def provision_api_key(
         )
 
     raise APIKeyGenerationError("No fue posible generar un key_id único")
+
+
+@dataclass(frozen=True, slots=True)
+class AuthenticatedAPIKey:
+    id: int
+    key_id: str
+    user_id: int
+    name: str
+    last_used_at: datetime | None
+
+
+def authenticate_api_key(
+    db: Session,
+    *,
+    raw_key: str,
+    pepper: str,
+) -> AuthenticatedAPIKey:
+    try:
+        key_id = extract_api_key_id(raw_key)
+
+    except InvalidAPIKeyFormatError as exc:
+        raise InvalidAPIKeyError("API Key inválida") from exc
+
+    api_key = db.scalar(
+        select(ApiKey).options(joinedload(ApiKey.user)).where(ApiKey.key_id == key_id)
+    )
+
+    expected_digest = (
+        api_key.key_digest if api_key is not None else DUMMY_API_KEY_DIGEST
+    )
+
+    is_valid = verify_api_key(
+        raw_key,
+        expected_digest,
+        pepper,
+    )
+
+    if api_key is None or not is_valid:
+        raise InvalidAPIKeyError("API Key inválida")
+
+    now = datetime.now(UTC)
+
+    if api_key.revoked_at is not None:
+        raise RevokedAPIKeyError("API Key revocada")
+
+    if api_key.expires_at is not None and api_key.expires_at <= now:
+        raise ExpiredAPIKeyError("API Key expirada")
+
+    if not api_key.user.is_active:
+        raise InactiveAPIKeyOwnerError("El propietario de la API Key está inactivo")
+
+    if (
+        api_key.last_used_at is None
+        or api_key.last_used_at <= now - LAST_USED_UPDATE_INTERVAL
+    ):
+        api_key.last_used_at = now
+        db.commit()
+
+    return AuthenticatedAPIKey(
+        id=api_key.id,
+        key_id=api_key.key_id,
+        user_id=api_key.user_id,
+        name=api_key.name,
+        last_used_at=api_key.last_used_at,
+    )

@@ -152,3 +152,9 @@ class TaskResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class AuthContextResponse(BaseModel):
+    user_id: int
+    key_id: str
+    api_key_name: str

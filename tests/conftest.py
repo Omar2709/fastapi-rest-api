@@ -1,4 +1,5 @@
 from collections.abc import Callable, Generator
+from datetime import datetime
 
 import pytest
 from fastapi import status
@@ -10,6 +11,10 @@ import app.models
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
+from app.services.api_keys import (
+    ProvisionedAPIKey,
+    provision_api_key,
+)
 
 TEST_DB_NAME = f"{settings.db_name}_test"
 
@@ -134,3 +139,23 @@ def task_factory(
         return response.json()
 
     return create_task
+
+
+@pytest.fixture
+def api_key_factory(
+    db_session: Session,
+) -> Callable[..., ProvisionedAPIKey]:
+    def create_api_key(
+        user_id: int,
+        name: str = "Test API Key",
+        expires_at: datetime | None = None,
+    ) -> ProvisionedAPIKey:
+        return provision_api_key(
+            db_session,
+            user_id=user_id,
+            name=name,
+            pepper=settings.api_key_pepper.get_secret_value(),
+            expires_at=expires_at,
+        )
+
+    return create_api_key

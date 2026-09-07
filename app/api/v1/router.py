@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, status
 
 from app.api.errors import ErrorResponse
-from app.routers import tasks, users
+from app.routers import auth, tasks, users
 
 VALIDATION_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_422_UNPROCESSABLE_CONTENT: {
@@ -24,3 +24,5 @@ api_router.include_router(
     tasks.router,
     responses=VALIDATION_ERROR_RESPONSES,
 )
+
+api_router.include_router(auth.router)

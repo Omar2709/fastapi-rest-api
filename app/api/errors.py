@@ -20,6 +20,12 @@ class ErrorCode(StrEnum):
     METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED"
     HTTP_ERROR = "HTTP_ERROR"
 
+    API_KEY_MISSING = "API_KEY_MISSING"
+    API_KEY_INVALID = "API_KEY_INVALID"
+    API_KEY_REVOKED = "API_KEY_REVOKED"
+    API_KEY_EXPIRED = "API_KEY_EXPIRED"
+    API_KEY_OWNER_INACTIVE = "API_KEY_OWNER_INACTIVE"
+
 
 class ValidationErrorDetail(BaseModel):
     field: str
@@ -45,11 +51,13 @@ class APIError(Exception):
         code: ErrorCode,
         message: str,
         details: list[dict[str, Any]] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message
         self.details = details
+        self.headers = headers
 
         super().__init__(message)
 
@@ -69,6 +77,7 @@ async def api_error_handler(
                 "details": api_error.details,
             }
         },
+        headers=api_error.headers,
     )
 
 
