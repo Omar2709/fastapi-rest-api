@@ -64,6 +64,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Ejemplos](#ejemplos)
 - [Validación de datos](#validación-de-datos)
 - [Testing](#testing)
+- [Cobertura de tests](#cobertura-de-tests)
 - [Calidad de código](#calidad-de-código)
 - [Seguridad y buenas prácticas actuales](#seguridad-y-buenas-prácticas-actuales)
 - [Flujo de desarrollo](#flujo-de-desarrollo)
@@ -108,6 +109,10 @@ Este proyecto busca aprender de forma práctica:
 
 - Testing de endpoints con `pytest` y `TestClient`.
 
+- Medición de cobertura de líneas y ramas con `pytest-cov`.
+
+- Quality gates mínimos para proteger la cobertura del proyecto.
+
 - Aislamiento de pruebas mediante una base de datos separada.
 
 - Gestión de dependencias y entornos con `uv`.
@@ -117,6 +122,8 @@ Este proyecto busca aprender de forma práctica:
 - Linting y formateo automático con Ruff.
 
 - Control de versiones con Git y GitHub.
+
+- Uso de Conventional Commits para mantener un historial consistente.
 
 - Preparación del flujo local para futura integración continua con GitHub Actions.
 
@@ -136,6 +143,7 @@ Este proyecto busca aprender de forma práctica:
 | Alembic | Migraciones y versionado del esquema |
 | Uvicorn | Servidor ASGI |
 | pytest | Suite de tests automatizados |
+| pytest-cov | Cobertura de líneas y ramas sobre el código de aplicación |
 | FastAPI TestClient | Pruebas HTTP de la aplicación |
 | Ruff | Linting, orden de imports y formateo |
 | uv | Gestión de dependencias, entorno virtual y lockfile |
@@ -542,6 +550,10 @@ La versión definida en `FastAPI(version="0.1.0")` representa la versión del so
 201 Created
 
     Se creó un nuevo recurso.
+
+204 No Content
+
+    El recurso fue eliminado correctamente.
 
 404 Not Found
 
@@ -1196,6 +1208,75 @@ uv run pytest tests/test_users.py::nombre_del_test
 
 ```
 
+
+---
+
+## Cobertura de tests
+
+El proyecto utiliza `pytest-cov` para medir la cobertura del código de aplicación.
+
+La medición incluye cobertura de líneas y ramas sobre el paquete `app`.
+
+La configuración se mantiene en `pyproject.toml`:
+
+```toml
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+fail_under = 90
+
+[tool.coverage.html]
+directory = "htmlcov"
+```
+
+### Ejecutar tests con cobertura
+
+```bash
+uv run pytest --cov=app --cov-report=term-missing
+```
+
+El proyecto mantiene actualmente un umbral mínimo de cobertura del **90%**.
+
+Si la cobertura total cae por debajo de ese porcentaje, el comando finaliza con error aunque los tests funcionales hayan pasado. De esta forma, la cobertura actúa como un quality gate independiente.
+
+### Generar reporte HTML
+
+```bash
+uv run pytest --cov=app --cov-report=html
+```
+
+El reporte se genera en:
+
+```text
+htmlcov/index.html
+```
+
+Los archivos generados por Coverage no forman parte del código fuente y están excluidos mediante `.gitignore`:
+
+```text
+.coverage
+.coverage.*
+htmlcov/
+```
+
+### Quality gate local
+
+Antes de realizar un commit importante:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest --cov=app --cov-report=term-missing
+```
+
+El último comando ejecuta la suite de tests, mide cobertura de líneas y ramas y comprueba que se mantiene el umbral mínimo configurado.
+
+Actualmente el proyecto mantiene una cobertura superior al umbral mínimo establecido. El porcentaje exacto no se fija en el README porque evoluciona con el código.
+
 ---
 
 ## Calidad de código
@@ -1262,7 +1343,7 @@ uv run ruff check .
 
 uv run ruff format --check .
 
-uv run pytest
+uv run pytest --cov=app --cov-report=term-missing
 
 ```
 
@@ -1324,6 +1405,10 @@ El proyecto aplica actualmente las siguientes prácticas:
 
 - Control de calidad local antes de commits importantes.
 
+- Cobertura de líneas y ramas mediante `pytest-cov` con quality gate mínimo del 90%.
+
+- Historial de cambios siguiendo Conventional Commits.
+
 - Los errores de validación no reflejan el valor original recibido.
 
 Todavía faltan mecanismos importantes como autenticación mediante API Keys, autorización por scopes, rate limiting, observabilidad y automatización mediante CI.
@@ -1335,76 +1420,94 @@ Todavía faltan mecanismos importantes como autenticación mediante API Keys, au
 El desarrollo se organiza en bloques funcionales. Después de completar y comprobar cada bloque se realiza un commit independiente.
 
 ```text
-
-Implementar
-
+Bloque funcional
     |
-
     v
-
-Probar
-
-    |
-
-    v
-
 Ruff lint
-
     |
-
     v
-
 Ruff format check
-
     |
-
     v
-
-pytest
-
+Tests + coverage
     |
-
     v
-
-Revisar cambios
-
+Revisar git diff
     |
-
     v
-
-Commit
-
+Conventional Commit
+    |
+    v
+Push
 ```
 
 Antes de realizar un commit importante:
 
 ```bash
-
 uv run ruff check .
-
 uv run ruff format --check .
-
-uv run pytest
+uv run pytest --cov=app --cov-report=term-missing
 
 git status
-
 git diff
-
 ```
 
 Después:
 
 ```bash
-
 git add <archivos>
-
-git commit -m "Descripción clara del cambio"
-
+git commit -m "type(scope): short description"
 git push
-
 ```
 
-Los mensajes de commit buscan ser breves y descriptivos.
+### Convención de commits
+
+El proyecto utiliza **Conventional Commits**.
+
+Formato:
+
+```text
+type(scope): description
+```
+
+Ejemplos:
+
+```text
+feat(api): add v1 versioning
+fix(users): handle duplicate email conflicts
+test(coverage): add minimum coverage quality gate
+docs: update project documentation
+ci: run quality checks in GitHub Actions
+```
+
+Los scopes son opcionales y se utilizan cuando ayudan a identificar el área afectada.
+
+Los tipos utilizados habitualmente son:
+
+```text
+feat      nueva funcionalidad o capacidad
+fix       corrección de un bug
+refactor  cambio interno sin modificar el comportamiento esperado
+test      tests o infraestructura de testing
+docs      documentación
+ci        integración continua o pipelines
+perf      mejoras de rendimiento
+chore     mantenimiento general
+build     dependencias, packaging o build
+style     cambios de formato sin alterar lógica
+```
+
+El tipo representa el propósito principal del commit. Los tests y la documentación que acompañan a una nueva funcionalidad no requieren tipos adicionales en el mismo mensaje.
+
+Las descripciones se escriben en inglés y en minúsculas después de `:`.
+
+Los cambios incompatibles pueden marcarse con `!`:
+
+```text
+feat(api)!: change job response schema
+```
+
+Cuando sea necesario, el cuerpo del commit puede documentar explícitamente el cambio incompatible mediante `BREAKING CHANGE:`.
 
 Las migraciones de Alembic, `pyproject.toml` y `uv.lock` forman parte del código fuente y deben versionarse cuando correspondan.
 
@@ -1478,9 +1581,18 @@ Nunca debe incluirse `.env`.
 
 - [x] Respuestas `422` documentadas en OpenAPI mediante `ErrorResponse`.
 
+- [x] Medición de cobertura mediante `pytest-cov`.
+
+- [x] Cobertura de líneas y branches.
+
+- [x] Quality gate mínimo de cobertura del 90%.
+
+- [x] Artefactos locales de Coverage excluidos mediante `.gitignore`.
+
+- [x] Convención de commits mediante Conventional Commits.
+
 ### Próximos pasos
 
-- [ ] Añadir medición de cobertura de tests.
 
 - [ ] Integrar Ruff y pytest en GitHub Actions.
 
@@ -1525,7 +1637,9 @@ Este proyecto intenta evitar utilizar las herramientas como cajas negras. La int
 Por ejemplo:
 
 ```python
+
 db.get(User, 1)
+
 ```
 
 representa conceptualmente una operación similar a:
@@ -1543,9 +1657,11 @@ WHERE id = 1;
 Y:
 
 ```python
+
 db.delete(user)
 
 db.commit()
+
 ```
 
 termina produciendo conceptualmente:
@@ -1561,7 +1677,9 @@ WHERE id = 1;
 De forma similar:
 
 ```python
+
 task_data.model_dump(exclude_unset=True)
+
 ```
 
 permite distinguir los campos enviados realmente durante una actualización parcial.
