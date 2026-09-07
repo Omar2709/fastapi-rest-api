@@ -3,13 +3,13 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
     Response,
     status,
 )
 from sqlalchemy.orm import Session
 
+from app.api.errors import APIError, ErrorCode
 from app.database import get_db
 from app.models import User
 from app.schemas import (
@@ -41,9 +41,10 @@ def get_user_or_404(
     )
 
     if user is None:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado",
+            code=ErrorCode.USER_NOT_FOUND,
+            message="Usuario no encontrado",
         )
 
     return user
@@ -97,9 +98,10 @@ def create_user(
         )
 
     except user_service.DuplicateEmailError as exc:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un usuario con ese email",
+            code=ErrorCode.DUPLICATE_EMAIL,
+            message="Ya existe un usuario con ese email",
         ) from exc
 
 
@@ -125,9 +127,10 @@ def update_user(
         )
 
     except user_service.DuplicateEmailError as exc:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un usuario con ese email",
+            code=ErrorCode.DUPLICATE_EMAIL,
+            message="Ya existe un usuario con ese email",
         ) from exc
 
 
@@ -151,9 +154,10 @@ def delete_user(
         )
 
     except user_service.UserHasTasksError as exc:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_409_CONFLICT,
-            detail=("No se puede eliminar el usuario porque tiene tareas asociadas"),
+            code=ErrorCode.USER_HAS_TASKS,
+            message=("No se puede eliminar el usuario porque tiene tareas asociadas"),
         ) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

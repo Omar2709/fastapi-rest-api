@@ -45,40 +45,32 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 ## Contenido
 
 - [Dirección del proyecto](#dirección-del-proyecto)
-
 - [Objetivos de aprendizaje](#objetivos-de-aprendizaje)
-
 - [Tecnologías](#tecnologías)
-
 - [Arquitectura](#arquitectura)
-
 - [Estructura del proyecto](#estructura-del-proyecto)
-
 - [Modelo de datos](#modelo-de-datos)
-
 - [Endpoints](#endpoints)
-
 - [Versionado de la API](#versionado-de-la-api)
-
+- [Códigos HTTP relevantes](#códigos-http-relevantes)
+- [Contrato de errores](#contrato-de-errores)
 - [Requisitos](#requisitos)
-
 - [Instalación](#instalación)
-
+- [Gestión de dependencias con uv](#gestión-de-dependencias-con-uv)
 - [Configuración](#configuración)
-
 - [Base de datos](#base-de-datos)
-
 - [Migraciones con Alembic](#migraciones-con-alembic)
-
 - [Ejecutar la API](#ejecutar-la-api)
-
+- [Ejemplos](#ejemplos)
+- [Validación de datos](#validación-de-datos)
 - [Testing](#testing)
-
 - [Calidad de código](#calidad-de-código)
-
+- [Seguridad y buenas prácticas actuales](#seguridad-y-buenas-prácticas-actuales)
 - [Flujo de desarrollo](#flujo-de-desarrollo)
-
 - [Estado actual](#estado-actual)
+- [Filosofía del proyecto](#filosofía-del-proyecto)
+- [Licencia](#licencia)
+- [Nota](#nota)
 
 ---
 
@@ -90,7 +82,7 @@ Este proyecto busca aprender de forma práctica:
 
 - Métodos HTTP: `GET`, `POST`, `PATCH` y `DELETE`.
 
-- Códigos de estado HTTP como `200`, `201`, `204`, `404`, `409` y `422`.
+- Códigos de estado HTTP como `200`, `201`, `204`, `404`, `405`, `409` y `422`.
 
 - Path parameters, query parameters y request bodies.
 
@@ -133,37 +125,21 @@ Este proyecto busca aprender de forma práctica:
 ## Tecnologías
 
 | Tecnología | Uso |
-
 | --- | --- |
-
 | Python | Lenguaje principal |
-
 | FastAPI | Framework para construir la API |
-
 | Pydantic | Validación y serialización de datos |
-
 | Pydantic Settings | Configuración mediante variables de entorno |
-
 | SQLAlchemy 2.x | ORM y acceso a la base de datos |
-
 | Psycopg 3 | Driver de PostgreSQL para Python |
-
 | PostgreSQL | Base de datos relacional |
-
 | Alembic | Migraciones y versionado del esquema |
-
 | Uvicorn | Servidor ASGI |
-
 | pytest | Suite de tests automatizados |
-
 | FastAPI TestClient | Pruebas HTTP de la aplicación |
-
 | Ruff | Linting, orden de imports y formateo |
-
 | uv | Gestión de dependencias, entorno virtual y lockfile |
-
 | Git | Control de versiones |
-
 | GitHub | Repositorio remoto |
 
 ---
@@ -176,41 +152,40 @@ El proyecto mantiene una separación sencilla por responsabilidades:
 
 Cliente
 
-   |
+   |
+   | HTTP
 
-   | HTTP
-
-   v
+   v
 
 FastAPI / Routers
 
-   |
+   |
 
-   v
+   v
 
 Pydantic
 
-   |
+   |
 
-   v
+   v
 
 Services
 
-   |
+   |
 
-   v
+   v
 
 SQLAlchemy ORM
 
-   |
+   |
 
-   v
+   v
 
 Psycopg
 
-   |
+   |
 
-   v
+   v
 
 PostgreSQL
 
@@ -222,37 +197,41 @@ PostgreSQL
 
 routers/
 
-    Manejo HTTP:
+    Manejo HTTP:
 
-    rutas, parámetros, códigos de estado y HTTPException.
+    rutas, parámetros, códigos de estado y traducción de errores a APIError.
 
 services/
 
-    Lógica de aplicación y operaciones con SQLAlchemy.
+    Lógica de aplicación y operaciones con SQLAlchemy.
 
 schemas.py
 
-    Modelos Pydantic para datos de entrada y salida.
+    Modelos Pydantic para datos de entrada y salida.
 
 models.py
 
-    Modelos ORM que representan las tablas de PostgreSQL.
+    Modelos ORM que representan las tablas de PostgreSQL.
 
 database.py
 
-    Engine, Session y conexión con la base de datos.
+    Engine, Session y conexión con la base de datos.
 
 config.py
 
-    Configuración cargada desde variables de entorno.
+    Configuración cargada desde variables de entorno.
+
+api/errors.py
+
+    Contrato transversal de errores, códigos estables y handlers globales.
 
 migrations/
 
-    Historial de cambios del esquema administrado por Alembic.
+    Historial de cambios del esquema administrado por Alembic.
 
 tests/
 
-    Pruebas automatizadas y fixtures de testing.
+    Pruebas automatizadas y fixtures de testing.
 
 ```
 
@@ -270,77 +249,79 @@ fastapi-rest-api/
 
 ├── app/
 
-│   ├── __init__.py
+│   ├── __init__.py
 
-│   ├── api/
+│   ├── api/
 
-│   │   ├── __init__.py
+│   │   ├── __init__.py
 
-│   │   └── v1/
+│   │   ├── errors.py
 
-│   │       ├── __init__.py
+│   │   └── v1/
 
-│   │       └── router.py
+│   │       ├── __init__.py
 
-│   │
+│   │       └── router.py
 
-│   ├── main.py
+│   │
 
-│   ├── config.py
+│   ├── main.py
 
-│   ├── database.py
+│   ├── config.py
 
-│   ├── models.py
+│   ├── database.py
 
-│   ├── schemas.py
+│   ├── models.py
 
-│   │
+│   ├── schemas.py
 
-│   ├── routers/
+│   │
 
-│   │   ├── __init__.py
+│   ├── routers/
 
-│   │   ├── users.py
+│   │   ├── __init__.py
 
-│   │   └── tasks.py
+│   │   ├── users.py
 
-│   │
+│   │   └── tasks.py
 
-│   └── services/
+│   │
 
-│       ├── __init__.py
+│   └── services/
 
-│       ├── users.py
+│       ├── __init__.py
 
-│       └── tasks.py
+│       ├── users.py
+
+│       └── tasks.py
 
 │
 
 ├── migrations/
 
-│   ├── versions/
+│   ├── versions/
 
-│   ├── env.py
+│   ├── env.py
 
-│   └── script.py.mako
+│   └── script.py.mako
 
 │
 
 ├── sql/
 
-│   └── 01_users.sql
+│   └── 01_users.sql
 
 │
 
 ├── tests/
 
-│   ├── conftest.py
+│   ├── conftest.py
 
-│   ├── test_main.py
+│   ├── test_main.py
 
-│   ├── test_tasks.py
+│   ├── test_tasks.py
 
-│   └── test_users.py
+│   └── test_users.py
 
 │
 
@@ -382,15 +363,12 @@ Actualmente existen dos recursos relacionados:
 
 User
 
- |
+ |
+ | 1
+ |
+ | N
 
- | 1
-
- |
-
- | N
-
- v
+ v
 
 Task
 
@@ -475,27 +453,18 @@ Esto significa que PostgreSQL impide eliminar un usuario mientras tenga tareas a
 ### General
 
 | Método | Endpoint | Descripción |
-
 | --- | --- | --- |
-
 | `GET` | `/` | Mensaje principal |
-
 | `GET` | `/health` | Comprobación básica del estado de la API |
 
 ### Users
 
 | Método | Endpoint | Descripción |
-
 | --- | --- | --- |
-
 | `GET` | `/api/v1/users` | Obtener usuarios |
-
 | `GET` | `/api/v1/users/{user_id}` | Obtener un usuario |
-
 | `POST` | `/api/v1/users` | Crear un usuario |
-
 | `PATCH` | `/api/v1/users/{user_id}` | Actualizar parcialmente un usuario |
-
 | `DELETE` | `/api/v1/users/{user_id}` | Eliminar un usuario |
 
 El listado admite un límite validado entre `1` y `100`:
@@ -509,17 +478,11 @@ GET /api/v1/users?limit=10
 ### Tasks
 
 | Método | Endpoint | Descripción |
-
 | --- | --- | --- |
-
 | `POST` | `/api/v1/users/{user_id}/tasks` | Crear una tarea para un usuario |
-
 | `GET` | `/api/v1/users/{user_id}/tasks` | Obtener las tareas de un usuario |
-
 | `GET` | `/api/v1/tasks/{task_id}` | Obtener una tarea por ID |
-
 | `PATCH` | `/api/v1/tasks/{task_id}` | Actualizar parcialmente una tarea |
-
 | `DELETE` | `/api/v1/tasks/{task_id}` | Eliminar una tarea |
 
 El CRUD básico de `Task` está completo.
@@ -543,7 +506,9 @@ Por ejemplo:
 ```text
 
 GET  /api/v1/users
+
 POST /api/v1/users
+
 GET  /api/v1/tasks/{task_id}
 
 ```
@@ -555,6 +520,7 @@ Los endpoints operacionales:
 ```text
 
 /
+
 /health
 
 ```
@@ -571,33 +537,94 @@ La versión definida en `FastAPI(version="0.1.0")` representa la versión del so
 
 200 OK
 
-    Operación realizada correctamente.
+    Operación realizada correctamente.
 
 201 Created
 
-    Se creó un nuevo recurso.
-
-204 No Content
-
-    El recurso fue eliminado correctamente.
+    Se creó un nuevo recurso.
 
 404 Not Found
 
-    El recurso solicitado no existe.
+    El recurso solicitado no existe.
+
+405 Method Not Allowed
+
+    El método HTTP no está permitido para la ruta solicitada.
 
 409 Conflict
 
-    La operación entra en conflicto con el estado actual de los datos.
+    La operación entra en conflicto con el estado actual de los datos.
 
 422 Unprocessable Entity
 
-    Los datos enviados no cumplen las validaciones esperadas.
+    Los datos enviados no cumplen las validaciones esperadas.
 
 ```
 
 Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`.
 
 PostgreSQL bloquea primero la eliminación mediante la clave foránea y la aplicación convierte el error de integridad en una respuesta HTTP comprensible.
+
+---
+
+## Contrato de errores
+
+Los errores de la API utilizan una estructura uniforme:
+
+```json
+{
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "Usuario no encontrado",
+    "details": null
+  }
+}
+```
+
+### Campos
+
+- `code`: código estable y procesable por clientes.
+- `message`: descripción legible del error.
+- `details`: información adicional cuando aplica.
+
+El código HTTP continúa indicando la categoría general del problema (`404`, `405`, `409`, `422`, etc.), mientras que `error.code` identifica el caso concreto de forma estable. Los clientes pueden tomar decisiones usando el código sin depender del texto de `message`.
+
+Actualmente se utilizan códigos como:
+
+```text
+USER_NOT_FOUND
+TASK_NOT_FOUND
+DUPLICATE_EMAIL
+USER_HAS_TASKS
+VALIDATION_ERROR
+NOT_FOUND
+METHOD_NOT_ALLOWED
+HTTP_ERROR
+```
+
+Los errores de validación utilizan el código `VALIDATION_ERROR` y pueden incluir detalles de los campos inválidos:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Los datos enviados no son válidos",
+    "details": [
+      {
+        "field": "body.email",
+        "message": "valor inválido",
+        "type": "value_error"
+      }
+    ]
+  }
+}
+```
+
+Los valores originales recibidos no se reflejan en los detalles de validación para evitar exponer potencialmente información sensible. Solo se publican `field`, `message` y `type`.
+
+Los errores generados por el propio framework también utilizan este contrato. Por ejemplo, una ruta inexistente devuelve `NOT_FOUND` y un método HTTP no permitido devuelve `METHOD_NOT_ALLOWED`.
+
+En OpenAPI, las respuestas `422` de los endpoints bajo `/api/v1` se documentan mediante el modelo `ErrorResponse`.
 
 ---
 
@@ -869,19 +896,19 @@ uv run alembic upgrade head
 
 ```text
 
-Cambio en endpoints        -> no requiere migración
+Cambio en endpoints        -> no requiere migración
 
-Cambio en services         -> no requiere migración
+Cambio en services         -> no requiere migración
 
-Cambio en validaciones     -> normalmente no requiere migración
+Cambio en validaciones     -> normalmente no requiere migración
 
-Nueva tabla                -> requiere migración
+Nueva tabla                -> requiere migración
 
-Nueva columna              -> requiere migración
+Nueva columna              -> requiere migración
 
-Nueva foreign key          -> requiere migración
+Nueva foreign key          -> requiere migración
 
-Cambio del esquema SQL     -> requiere migración
+Cambio del esquema SQL     -> requiere migración
 
 ```
 
@@ -929,9 +956,9 @@ Content-Type: application/json
 
 {
 
-  "name": "Ana",
+  "name": "Ana",
 
-  "email": "ana@example.com"
+  "email": "ana@example.com"
 
 }
 
@@ -943,15 +970,15 @@ Respuesta aproximada:
 
 {
 
-  "id": 1,
+  "id": 1,
 
-  "name": "Ana",
+  "name": "Ana",
 
-  "email": "ana@example.com",
+  "email": "ana@example.com",
 
-  "created_at": "2026-01-01T12:00:00Z",
+  "created_at": "2026-01-01T12:00:00Z",
 
-  "is_active": true
+  "is_active": true
 
 }
 
@@ -967,7 +994,7 @@ Content-Type: application/json
 
 {
 
-  "is_active": false
+  "is_active": false
 
 }
 
@@ -985,9 +1012,9 @@ Content-Type: application/json
 
 {
 
-  "title": "Aprender relaciones",
+  "title": "Aprender relaciones",
 
-  "description": "Estudiar ForeignKey y relationship"
+  "description": "Estudiar ForeignKey y relationship"
 
 }
 
@@ -1003,7 +1030,7 @@ Content-Type: application/json
 
 {
 
-  "is_completed": true
+  "is_completed": true
 
 }
 
@@ -1015,7 +1042,7 @@ También es posible enviar explícitamente `null` en campos opcionales:
 
 {
 
-  "description": null
+  "description": null
 
 }
 
@@ -1067,27 +1094,27 @@ Conceptualmente:
 
 JSON
 
- |
+ |
 
- v
+ v
 
 TaskUpdate
 
- |
+ |
 
- v
+ v
 
 Service
 
- |
+ |
 
- v
+ v
 
 SQLAlchemy Model
 
- |
+ |
 
- v
+ v
 
 PostgreSQL
 
@@ -1243,11 +1270,11 @@ El resultado esperado es conceptualmente:
 
 ```text
 
-Ruff lint       ✅
+Ruff lint       ✅
 
-Ruff format     ✅
+Ruff format     ✅
 
-Tests           ✅
+Tests           ✅
 
 ```
 
@@ -1279,7 +1306,7 @@ El proyecto aplica actualmente las siguientes prácticas:
 
 - Campos modificables controlados mediante schemas específicos.
 
-- Manejo de errores HTTP como `404`, `409` y `422`.
+- Contrato uniforme para errores `404`, `405`, `409` y `422` mediante códigos estables.
 
 - Migraciones de base de datos versionadas.
 
@@ -1297,6 +1324,8 @@ El proyecto aplica actualmente las siguientes prácticas:
 
 - Control de calidad local antes de commits importantes.
 
+- Los errores de validación no reflejan el valor original recibido.
+
 Todavía faltan mecanismos importantes como autenticación mediante API Keys, autorización por scopes, rate limiting, observabilidad y automatización mediante CI.
 
 ---
@@ -1309,39 +1338,39 @@ El desarrollo se organiza en bloques funcionales. Después de completar y compro
 
 Implementar
 
-    |
+    |
 
-    v
+    v
 
 Probar
 
-    |
+    |
 
-    v
+    v
 
 Ruff lint
 
-    |
+    |
 
-    v
+    v
 
 Ruff format check
 
-    |
+    |
 
-    v
+    v
 
 pytest
 
-    |
+    |
 
-    v
+    v
 
 Revisar cambios
 
-    |
+    |
 
-    v
+    v
 
 Commit
 
@@ -1411,7 +1440,7 @@ Nunca debe incluirse `.env`.
 
 - [x] Actualizaciones parciales con `PATCH`.
 
-- [x] Manejo de errores `404`, `409` y `422`.
+- [x] Manejo de errores `404`, `405`, `409` y `422`.
 
 - [x] Alembic y migraciones.
 
@@ -1443,9 +1472,13 @@ Nunca debe incluirse `.env`.
 
 - [x] Versionado de la API bajo `/api/v1`.
 
-### Próximos pasos
+- [x] Contrato uniforme de respuestas de error.
 
-- [ ] Estandarizar las respuestas de error.
+- [x] Manejadores globales para errores HTTP y validación.
+
+- [x] Respuestas `422` documentadas en OpenAPI mediante `ErrorResponse`.
+
+### Próximos pasos
 
 - [ ] Añadir medición de cobertura de tests.
 
@@ -1545,4 +1578,4 @@ Por definir.
 
 ## Nota
 
-Este repositorio forma parte de un proyecto de aprendizaje y evoluciona progresivamente. Algunas decisiones arquitectónicas pueden cambiar a medid
+Este repositorio forma parte de un proyecto de aprendizaje y evoluciona progresivamente. Algunas decisiones arquitectónicas pueden cambiar a medida que se incorporen nuevos conceptos y necesidades.

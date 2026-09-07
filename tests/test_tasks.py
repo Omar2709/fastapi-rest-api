@@ -225,7 +225,13 @@ def test_create_task_for_nonexistent_user_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Usuario no encontrado"}
+    assert response.json() == {
+        "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "Usuario no encontrado",
+            "details": None,
+        }
+    }
 
 
 def test_get_tasks_for_nonexistent_user_returns_404(
@@ -235,7 +241,13 @@ def test_get_tasks_for_nonexistent_user_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Usuario no encontrado"}
+    assert response.json() == {
+        "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "Usuario no encontrado",
+            "details": None,
+        }
+    }
 
 
 def test_get_nonexistent_task_returns_404(
@@ -245,7 +257,13 @@ def test_get_nonexistent_task_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Tarea no encontrada"}
+    assert response.json() == {
+        "error": {
+            "code": "TASK_NOT_FOUND",
+            "message": "Tarea no encontrada",
+            "details": None,
+        }
+    }
 
 
 def test_update_nonexistent_task_returns_404(
@@ -260,7 +278,13 @@ def test_update_nonexistent_task_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Tarea no encontrada"}
+    assert response.json() == {
+        "error": {
+            "code": "TASK_NOT_FOUND",
+            "message": "Tarea no encontrada",
+            "details": None,
+        }
+    }
 
 
 def test_delete_nonexistent_task_returns_404(
@@ -270,7 +294,13 @@ def test_delete_nonexistent_task_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Tarea no encontrada"}
+    assert response.json() == {
+        "error": {
+            "code": "TASK_NOT_FOUND",
+            "message": "Tarea no encontrada",
+            "details": None,
+        }
+    }
 
 
 @pytest.mark.parametrize(
@@ -301,7 +331,12 @@ def test_create_task_with_invalid_data_returns_422(
 
     assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
-    assert "detail" in response.json()
+    data = response.json()
+
+    assert data["error"]["code"] == "VALIDATION_ERROR"
+    assert data["error"]["message"] == "Los datos enviados no son válidos"
+    assert data["error"]["details"]
+    assert "input" not in data["error"]["details"][0]
 
 
 def test_update_task_with_empty_body_returns_422(
@@ -322,7 +357,12 @@ def test_update_task_with_empty_body_returns_422(
 
     assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
-    assert "detail" in response.json()
+    data = response.json()
+
+    assert data["error"]["code"] == "VALIDATION_ERROR"
+    assert data["error"]["message"] == "Los datos enviados no son válidos"
+    assert data["error"]["details"]
+    assert "input" not in data["error"]["details"][0]
 
 
 def test_update_task_with_null_title_returns_422(
@@ -345,7 +385,12 @@ def test_update_task_with_null_title_returns_422(
 
     assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
-    assert "detail" in response.json()
+    data = response.json()
+
+    assert data["error"]["code"] == "VALIDATION_ERROR"
+    assert data["error"]["message"] == "Los datos enviados no son válidos"
+    assert data["error"]["details"]
+    assert "input" not in data["error"]["details"][0]
 
 
 def test_update_task_with_null_status_returns_422(
@@ -368,4 +413,9 @@ def test_update_task_with_null_status_returns_422(
 
     assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
-    assert "detail" in response.json()
+    data = response.json()
+
+    assert data["error"]["code"] == "VALIDATION_ERROR"
+    assert data["error"]["message"] == "Los datos enviados no son válidos"
+    assert data["error"]["details"]
+    assert "input" not in data["error"]["details"][0]

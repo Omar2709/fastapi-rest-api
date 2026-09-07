@@ -3,12 +3,12 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
     status,
 )
 from sqlalchemy.orm import Session
 
+from app.api.errors import APIError, ErrorCode
 from app.database import get_db
 from app.schemas import (
     TaskCreate,
@@ -45,9 +45,10 @@ def create_task(
     )
 
     if user is None:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado",
+            code=ErrorCode.USER_NOT_FOUND,
+            message="Usuario no encontrado",
         )
 
     return task_service.create_task(
@@ -76,9 +77,10 @@ def get_user_tasks(
     )
 
     if user is None:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado",
+            code=ErrorCode.USER_NOT_FOUND,
+            message="Usuario no encontrado",
         )
 
     return task_service.get_tasks_by_user(
@@ -102,9 +104,10 @@ def get_task(
     )
 
     if task is None:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tarea no encontrada",
+            code=ErrorCode.TASK_NOT_FOUND,
+            message="Tarea no encontrada",
         )
 
     return task
@@ -125,9 +128,10 @@ def update_task(
     )
 
     if task is None:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tarea no encontrada",
+            code=ErrorCode.TASK_NOT_FOUND,
+            message="Tarea no encontrada",
         )
 
     return task_service.update_task(
@@ -151,9 +155,10 @@ def delete_task(
     )
 
     if task is None:
-        raise HTTPException(
+        raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tarea no encontrada",
+            code=ErrorCode.TASK_NOT_FOUND,
+            message="Tarea no encontrada",
         )
 
     task_service.delete_task(

@@ -154,7 +154,13 @@ def test_get_nonexistent_user_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Usuario no encontrado"}
+    assert response.json() == {
+        "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "Usuario no encontrado",
+            "details": None,
+        }
+    }
 
 
 def test_update_user_with_empty_body_returns_422(
@@ -170,7 +176,12 @@ def test_update_user_with_empty_body_returns_422(
 
     assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
-    assert "detail" in response.json()
+    data = response.json()
+
+    assert data["error"]["code"] == "VALIDATION_ERROR"
+    assert data["error"]["message"] == "Los datos enviados no son válidos"
+    assert data["error"]["details"]
+    assert "input" not in data["error"]["details"][0]
 
 
 def test_update_nonexistent_user_returns_404(
@@ -185,7 +196,13 @@ def test_update_nonexistent_user_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Usuario no encontrado"}
+    assert response.json() == {
+        "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "Usuario no encontrado",
+            "details": None,
+        }
+    }
 
 
 def test_delete_nonexistent_user_returns_404(
@@ -195,7 +212,13 @@ def test_delete_nonexistent_user_returns_404(
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
-    assert response.json() == {"detail": "Usuario no encontrado"}
+    assert response.json() == {
+        "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "Usuario no encontrado",
+            "details": None,
+        }
+    }
 
 
 def test_create_user_with_duplicate_email_returns_409(
@@ -217,7 +240,13 @@ def test_create_user_with_duplicate_email_returns_409(
 
     assert response.status_code == (status.HTTP_409_CONFLICT)
 
-    assert response.json() == {"detail": ("Ya existe un usuario con ese email")}
+    assert response.json() == {
+        "error": {
+            "code": "DUPLICATE_EMAIL",
+            "message": "Ya existe un usuario con ese email",
+            "details": None,
+        }
+    }
 
 
 def test_update_user_with_duplicate_email_returns_409(
@@ -243,7 +272,13 @@ def test_update_user_with_duplicate_email_returns_409(
 
     assert response.status_code == (status.HTTP_409_CONFLICT)
 
-    assert response.json() == {"detail": ("Ya existe un usuario con ese email")}
+    assert response.json() == {
+        "error": {
+            "code": "DUPLICATE_EMAIL",
+            "message": "Ya existe un usuario con ese email",
+            "details": None,
+        }
+    }
 
     get_response = client.get(f"/api/v1/users/{second_user['id']}")
 
@@ -278,7 +313,12 @@ def test_create_user_with_invalid_data_returns_422(
 
     assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
-    assert "detail" in response.json()
+    data = response.json()
+
+    assert data["error"]["code"] == "VALIDATION_ERROR"
+    assert data["error"]["message"] == "Los datos enviados no son válidos"
+    assert data["error"]["details"]
+    assert "input" not in data["error"]["details"][0]
 
 
 def test_delete_user_with_tasks_returns_409(
@@ -298,7 +338,13 @@ def test_delete_user_with_tasks_returns_409(
     assert response.status_code == (status.HTTP_409_CONFLICT)
 
     assert response.json() == {
-        "detail": ("No se puede eliminar el usuario porque tiene tareas asociadas")
+        "error": {
+            "code": "USER_HAS_TASKS",
+            "message": (
+                "No se puede eliminar el usuario porque tiene tareas asociadas"
+            ),
+            "details": None,
+        }
     }
 
     get_response = client.get(f"/api/v1/users/{user['id']}")
