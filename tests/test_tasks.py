@@ -10,7 +10,7 @@ def test_create_task(
     user = user_factory()
 
     response = client.post(
-        f"/users/{user['id']}/tasks",
+        f"/api/v1/users/{user['id']}/tasks",
         json={
             "title": "Aprender testing",
             "description": "Probar endpoints de Tasks",
@@ -47,7 +47,7 @@ def test_get_tasks_by_user(
         title="Segunda tarea",
     )
 
-    response = client.get(f"/users/{user['id']}/tasks")
+    response = client.get(f"/api/v1/users/{user['id']}/tasks")
 
     assert response.status_code == (status.HTTP_200_OK)
 
@@ -88,7 +88,7 @@ def test_get_tasks_returns_only_user_tasks(
         title="Tarea de Carlos",
     )
 
-    response = client.get(f"/users/{first_user['id']}/tasks")
+    response = client.get(f"/api/v1/users/{first_user['id']}/tasks")
 
     assert response.status_code == (status.HTTP_200_OK)
 
@@ -112,7 +112,7 @@ def test_get_task_by_id(
         description="Estudiar TestClient",
     )
 
-    response = client.get(f"/tasks/{task['id']}")
+    response = client.get(f"/api/v1/tasks/{task['id']}")
 
     assert response.status_code == (status.HTTP_200_OK)
 
@@ -138,7 +138,7 @@ def test_update_task(
     )
 
     response = client.patch(
-        f"/tasks/{task['id']}",
+        f"/api/v1/tasks/{task['id']}",
         json={
             "title": "Dominar FastAPI",
             "is_completed": True,
@@ -154,7 +154,7 @@ def test_update_task(
     assert data["is_completed"] is True
     assert data["user_id"] == user["id"]
 
-    get_response = client.get(f"/tasks/{task['id']}")
+    get_response = client.get(f"/api/v1/tasks/{task['id']}")
 
     assert get_response.status_code == (status.HTTP_200_OK)
 
@@ -178,7 +178,7 @@ def test_update_task_can_remove_description(
     )
 
     response = client.patch(
-        f"/tasks/{task['id']}",
+        f"/api/v1/tasks/{task['id']}",
         json={
             "description": None,
         },
@@ -202,13 +202,13 @@ def test_delete_task(
         user_id=user["id"],
     )
 
-    response = client.delete(f"/tasks/{task['id']}")
+    response = client.delete(f"/api/v1/tasks/{task['id']}")
 
     assert response.status_code == (status.HTTP_204_NO_CONTENT)
 
     assert response.content == b""
 
-    get_response = client.get(f"/tasks/{task['id']}")
+    get_response = client.get(f"/api/v1/tasks/{task['id']}")
 
     assert get_response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -217,7 +217,7 @@ def test_create_task_for_nonexistent_user_returns_404(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/users/999999999/tasks",
+        "/api/v1/users/999999999/tasks",
         json={
             "title": "Tarea de prueba",
         },
@@ -231,7 +231,7 @@ def test_create_task_for_nonexistent_user_returns_404(
 def test_get_tasks_for_nonexistent_user_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.get("/users/999999999/tasks")
+    response = client.get("/api/v1/users/999999999/tasks")
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -241,7 +241,7 @@ def test_get_tasks_for_nonexistent_user_returns_404(
 def test_get_nonexistent_task_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.get("/tasks/999999999")
+    response = client.get("/api/v1/tasks/999999999")
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -252,7 +252,7 @@ def test_update_nonexistent_task_returns_404(
     client: TestClient,
 ) -> None:
     response = client.patch(
-        "/tasks/999999999",
+        "/api/v1/tasks/999999999",
         json={
             "title": "Nuevo título",
         },
@@ -266,7 +266,7 @@ def test_update_nonexistent_task_returns_404(
 def test_delete_nonexistent_task_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.delete("/tasks/999999999")
+    response = client.delete("/api/v1/tasks/999999999")
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -295,7 +295,7 @@ def test_create_task_with_invalid_data_returns_422(
     user = user_factory()
 
     response = client.post(
-        f"/users/{user['id']}/tasks",
+        f"/api/v1/users/{user['id']}/tasks",
         json=payload,
     )
 
@@ -316,7 +316,7 @@ def test_update_task_with_empty_body_returns_422(
     )
 
     response = client.patch(
-        f"/tasks/{task['id']}",
+        f"/api/v1/tasks/{task['id']}",
         json={},
     )
 
@@ -337,7 +337,7 @@ def test_update_task_with_null_title_returns_422(
     )
 
     response = client.patch(
-        f"/tasks/{task['id']}",
+        f"/api/v1/tasks/{task['id']}",
         json={
             "title": None,
         },
@@ -360,7 +360,7 @@ def test_update_task_with_null_status_returns_422(
     )
 
     response = client.patch(
-        f"/tasks/{task['id']}",
+        f"/api/v1/tasks/{task['id']}",
         json={
             "is_completed": None,
         },

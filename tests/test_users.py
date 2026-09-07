@@ -7,7 +7,7 @@ def test_create_user(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/users",
+        "/api/v1/users",
         json={
             "name": "Ana",
             "email": "ana@example.com",
@@ -33,7 +33,7 @@ def test_create_user(
 def test_get_users_starts_empty(
     client: TestClient,
 ) -> None:
-    response = client.get("/users")
+    response = client.get("/api/v1/users")
 
     assert response.status_code == (status.HTTP_200_OK)
 
@@ -54,7 +54,7 @@ def test_get_users_returns_created_users(
         email="carlos@example.com",
     )
 
-    response = client.get("/users")
+    response = client.get("/api/v1/users")
 
     assert response.status_code == (status.HTTP_200_OK)
 
@@ -79,7 +79,7 @@ def test_get_user_by_id(
         email="ana@example.com",
     )
 
-    response = client.get(f"/users/{user['id']}")
+    response = client.get(f"/api/v1/users/{user['id']}")
 
     assert response.status_code == (status.HTTP_200_OK)
 
@@ -101,7 +101,7 @@ def test_update_user(
     )
 
     response = client.patch(
-        f"/users/{user['id']}",
+        f"/api/v1/users/{user['id']}",
         json={
             "name": "Ana Actualizada",
             "is_active": False,
@@ -117,7 +117,7 @@ def test_update_user(
     assert data["email"] == "ana@example.com"
     assert data["is_active"] is False
 
-    get_response = client.get(f"/users/{user['id']}")
+    get_response = client.get(f"/api/v1/users/{user['id']}")
 
     assert get_response.status_code == (status.HTTP_200_OK)
 
@@ -136,13 +136,13 @@ def test_delete_user(
         email="ana@example.com",
     )
 
-    response = client.delete(f"/users/{user['id']}")
+    response = client.delete(f"/api/v1/users/{user['id']}")
 
     assert response.status_code == (status.HTTP_204_NO_CONTENT)
 
     assert response.content == b""
 
-    get_response = client.get(f"/users/{user['id']}")
+    get_response = client.get(f"/api/v1/users/{user['id']}")
 
     assert get_response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -150,7 +150,7 @@ def test_delete_user(
 def test_get_nonexistent_user_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.get("/users/999999999")
+    response = client.get("/api/v1/users/999999999")
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -164,7 +164,7 @@ def test_update_user_with_empty_body_returns_422(
     user = user_factory()
 
     response = client.patch(
-        f"/users/{user['id']}",
+        f"/api/v1/users/{user['id']}",
         json={},
     )
 
@@ -177,7 +177,7 @@ def test_update_nonexistent_user_returns_404(
     client: TestClient,
 ) -> None:
     response = client.patch(
-        "/users/999999999",
+        "/api/v1/users/999999999",
         json={
             "name": "Nuevo Nombre",
         },
@@ -191,7 +191,7 @@ def test_update_nonexistent_user_returns_404(
 def test_delete_nonexistent_user_returns_404(
     client: TestClient,
 ) -> None:
-    response = client.delete("/users/999999999")
+    response = client.delete("/api/v1/users/999999999")
 
     assert response.status_code == (status.HTTP_404_NOT_FOUND)
 
@@ -208,7 +208,7 @@ def test_create_user_with_duplicate_email_returns_409(
     )
 
     response = client.post(
-        "/users",
+        "/api/v1/users",
         json={
             "name": "Carlos",
             "email": "ana@example.com",
@@ -235,7 +235,7 @@ def test_update_user_with_duplicate_email_returns_409(
     )
 
     response = client.patch(
-        f"/users/{second_user['id']}",
+        f"/api/v1/users/{second_user['id']}",
         json={
             "email": first_user["email"],
         },
@@ -245,7 +245,7 @@ def test_update_user_with_duplicate_email_returns_409(
 
     assert response.json() == {"detail": ("Ya existe un usuario con ese email")}
 
-    get_response = client.get(f"/users/{second_user['id']}")
+    get_response = client.get(f"/api/v1/users/{second_user['id']}")
 
     assert get_response.status_code == (status.HTTP_200_OK)
 
@@ -272,7 +272,7 @@ def test_create_user_with_invalid_data_returns_422(
     payload: dict,
 ) -> None:
     response = client.post(
-        "/users",
+        "/api/v1/users",
         json=payload,
     )
 
@@ -293,7 +293,7 @@ def test_delete_user_with_tasks_returns_409(
         title="Tarea pendiente",
     )
 
-    response = client.delete(f"/users/{user['id']}")
+    response = client.delete(f"/api/v1/users/{user['id']}")
 
     assert response.status_code == (status.HTTP_409_CONFLICT)
 
@@ -301,6 +301,6 @@ def test_delete_user_with_tasks_returns_409(
         "detail": ("No se puede eliminar el usuario porque tiene tareas asociadas")
     }
 
-    get_response = client.get(f"/users/{user['id']}")
+    get_response = client.get(f"/api/v1/users/{user['id']}")
 
     assert get_response.status_code == (status.HTTP_200_OK)

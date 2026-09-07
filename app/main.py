@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import tasks, users
+from app.api.v1.router import api_router
 
 app = FastAPI(
     title="FastAPI REST API",
@@ -8,8 +8,10 @@ app = FastAPI(
 )
 
 
-app.include_router(users.router)
-app.include_router(tasks.router)
+app.include_router(
+    api_router,
+    prefix="/api/v1",
+)
 
 
 @app.get("/")

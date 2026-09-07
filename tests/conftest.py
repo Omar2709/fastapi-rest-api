@@ -98,7 +98,7 @@ def user_factory(
         email: str = "ana@example.com",
     ) -> dict:
         response = client.post(
-            "/users",
+            "/api/v1/users",
             json={
                 "name": name,
                 "email": email,
@@ -122,7 +122,7 @@ def task_factory(
         description: str | None = None,
     ) -> dict:
         response = client.post(
-            f"/users/{user_id}/tasks",
+            f"/api/v1/users/{user_id}/tasks",
             json={
                 "title": title,
                 "description": description,
