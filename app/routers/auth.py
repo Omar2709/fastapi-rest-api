@@ -27,4 +27,5 @@ def get_auth_context(
         user_id=current_api_key.user_id,
         key_id=current_api_key.key_id,
         api_key_name=current_api_key.name,
+        scopes=sorted(current_api_key.scopes),
     )

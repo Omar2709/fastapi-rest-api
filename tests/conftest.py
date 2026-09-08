@@ -149,6 +149,7 @@ def api_key_factory(
         user_id: int,
         name: str = "Test API Key",
         expires_at: datetime | None = None,
+        scopes: tuple[str, ...] = (),
     ) -> ProvisionedAPIKey:
         return provision_api_key(
             db_session,
@@ -156,6 +157,7 @@ def api_key_factory(
             name=name,
             pepper=settings.api_key_pepper.get_secret_value(),
             expires_at=expires_at,
+            scopes=scopes,
         )
 
     return create_api_key

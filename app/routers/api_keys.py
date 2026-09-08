@@ -8,7 +8,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.auth import CurrentAPIKey
+from app.api.dependencies.auth import require_scopes
 from app.api.errors import (
     APIError,
     ErrorCode,
@@ -21,7 +21,9 @@ from app.schemas import (
     APIKeyCreatedResponse,
     APIKeyResponse,
 )
+from app.security.scopes import APIKeyScope
 from app.services import api_keys as api_key_service
+from app.services.api_keys import AuthenticatedAPIKey
 
 router = APIRouter(
     prefix="/api-keys",
@@ -32,6 +34,25 @@ router = APIRouter(
 DbSession = Annotated[
     Session,
     Depends(get_db),
+]
+
+
+APIKeysReader = Annotated[
+    AuthenticatedAPIKey,
+    Depends(
+        require_scopes(
+            APIKeyScope.API_KEYS_READ,
+        )
+    ),
+]
+
+APIKeysWriter = Annotated[
+    AuthenticatedAPIKey,
+    Depends(
+        require_scopes(
+            APIKeyScope.API_KEYS_WRITE,
+        )
+    ),
 ]
 
 
@@ -49,6 +70,10 @@ APIKeyId = Annotated[
     "",
     response_model=APIKeyCreatedResponse,
     status_code=status.HTTP_201_CREATED,
+    description=(
+        "Crea una API Key para el usuario autenticado. "
+        "Requiere el scope `api-keys:write`."
+    ),
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "model": ErrorResponse,
@@ -62,9 +87,25 @@ APIKeyId = Annotated[
 )
 def create_api_key(
     api_key_data: APIKeyCreate,
-    current_api_key: CurrentAPIKey,
+    current_api_key: APIKeysWriter,
     db: DbSession,
 ) -> APIKeyCreatedResponse:
+    requested_scopes = {scope.value for scope in api_key_data.scopes}
+
+    missing_scopes = sorted(requested_scopes - current_api_key.scopes)
+
+    if missing_scopes:
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code=ErrorCode.INSUFFICIENT_SCOPE,
+            message="La API Key no puede delegar scopes que no posee",
+            details=[
+                {
+                    "missing_scopes": missing_scopes,
+                }
+            ],
+        )
+
     try:
         result = api_key_service.provision_api_key(
             db,
@@ -72,6 +113,7 @@ def create_api_key(
             name=api_key_data.name,
             pepper=settings.api_key_pepper.get_secret_value(),
             expires_at=api_key_data.expires_at,
+            scopes=api_key_data.scopes,
         )
 
     except (
@@ -101,6 +143,7 @@ def create_api_key(
     return APIKeyCreatedResponse(
         key_id=result.api_key.key_id,
         name=result.api_key.name,
+        scopes=[APIKeyScope(scope) for scope in result.api_key.scopes],
         created_at=result.api_key.created_at,
         expires_at=result.api_key.expires_at,
         revoked_at=result.api_key.revoked_at,
@@ -112,6 +155,9 @@ def create_api_key(
 @router.get(
     "",
     response_model=list[APIKeyResponse],
+    description=(
+        "Lista las API Keys del usuario autenticado. Requiere el scope `api-keys:read`."
+    ),
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "model": ErrorResponse,
@@ -120,7 +166,7 @@ def create_api_key(
     },
 )
 def get_api_keys(
-    current_api_key: CurrentAPIKey,
+    current_api_key: APIKeysReader,
     db: DbSession,
 ) -> list[APIKeyResponse]:
     return [
@@ -135,6 +181,10 @@ def get_api_keys(
 @router.post(
     "/{key_id}/revoke",
     response_model=APIKeyResponse,
+    description=(
+        "Revoca una API Key del usuario autenticado. "
+        "Requiere el scope `api-keys:write`."
+    ),
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "model": ErrorResponse,
@@ -152,7 +202,7 @@ def get_api_keys(
 )
 def revoke_api_key(
     key_id: APIKeyId,
-    current_api_key: CurrentAPIKey,
+    current_api_key: APIKeysWriter,
     db: DbSession,
 ) -> APIKeyResponse:
     try:

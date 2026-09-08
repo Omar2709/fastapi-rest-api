@@ -13,8 +13,10 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    text,
     true,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
@@ -196,4 +198,11 @@ class ApiKey(Base):
 
     user: Mapped[User] = relationship(
         back_populates="api_keys",
+    )
+
+    scopes: Mapped[list[str]] = mapped_column(
+        ARRAY(String(50)),
+        nullable=False,
+        default=list,
+        server_default=text("'{}'::character varying[]"),
     )

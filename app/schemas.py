@@ -9,6 +9,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.security.scopes import APIKeyScope
+
 
 def normalize_name(value: str) -> str:
     value = value.strip()
@@ -158,6 +160,7 @@ class AuthContextResponse(BaseModel):
     user_id: int
     key_id: str
     api_key_name: str
+    scopes: list[str]
 
 
 class APIKeyCreate(BaseModel):
@@ -168,6 +171,10 @@ class APIKeyCreate(BaseModel):
     name: str = Field(
         min_length=1,
         max_length=100,
+    )
+
+    scopes: list[APIKeyScope] = Field(
+        default_factory=list,
     )
 
     expires_at: datetime | None = None
@@ -203,6 +210,17 @@ class APIKeyCreate(BaseModel):
 
         return value
 
+    @field_validator("scopes")
+    @classmethod
+    def validate_unique_scopes(
+        cls,
+        value: list[APIKeyScope],
+    ) -> list[APIKeyScope]:
+        if len(value) != len(set(value)):
+            raise ValueError("Los scopes no pueden repetirse")
+
+        return value
+
 
 class APIKeyResponse(BaseModel):
     model_config = ConfigDict(
@@ -215,6 +233,7 @@ class APIKeyResponse(BaseModel):
     expires_at: datetime | None
     revoked_at: datetime | None
     last_used_at: datetime | None
+    scopes: list[APIKeyScope]
 
 
 class APIKeyCreatedResponse(APIKeyResponse):

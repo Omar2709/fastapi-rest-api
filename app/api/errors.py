@@ -30,6 +30,8 @@ class ErrorCode(StrEnum):
     API_KEY_ALREADY_REVOKED = "API_KEY_ALREADY_REVOKED"
     API_KEY_CREATION_FAILED = "API_KEY_CREATION_FAILED"
 
+    INSUFFICIENT_SCOPE = "INSUFFICIENT_SCOPE"
+
 
 class ValidationErrorDetail(BaseModel):
     field: str

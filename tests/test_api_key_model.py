@@ -153,3 +153,62 @@ def test_deleting_user_cascades_api_keys(
     )
 
     assert remaining_api_keys == 0
+
+
+def test_api_key_scopes_are_persisted(
+    db_session: Session,
+) -> None:
+    user = User(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    api_key = ApiKey(
+        user_id=user.id,
+        name="Scoped key",
+        key_id="a" * 24,
+        key_digest="b" * 64,
+        scopes=[
+            "api-keys:read",
+            "api-keys:write",
+        ],
+    )
+
+    db_session.add(api_key)
+    db_session.commit()
+    db_session.refresh(api_key)
+
+    assert api_key.scopes == [
+        "api-keys:read",
+        "api-keys:write",
+    ]
+
+
+def test_api_key_scopes_default_to_empty(
+    db_session: Session,
+) -> None:
+    user = User(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    api_key = ApiKey(
+        user_id=user.id,
+        name="No permissions",
+        key_id="a" * 24,
+        key_digest="b" * 64,
+    )
+
+    db_session.add(api_key)
+    db_session.commit()
+    db_session.refresh(api_key)
+
+    assert api_key.scopes == []

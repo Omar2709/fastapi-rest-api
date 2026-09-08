@@ -25,6 +25,7 @@ def test_create_api_key_for_authenticated_user(
     authentication_key = api_key_factory(
         user_id=user["id"],
         name="Authentication key",
+        scopes=("api-keys:write",),
     )
 
     response = client.post(
@@ -35,7 +36,7 @@ def test_create_api_key_for_authenticated_user(
         },
     )
 
-    assert response.status_code == (status.HTTP_201_CREATED)
+    assert response.status_code == status.HTTP_201_CREATED
 
     data = response.json()
 
@@ -71,6 +72,7 @@ def test_create_api_key_rejects_user_id(
 
     authentication_key = api_key_factory(
         user_id=first_user["id"],
+        scopes=("api-keys:write",),
     )
 
     response = client.post(
@@ -82,7 +84,7 @@ def test_create_api_key_rejects_user_id(
         },
     )
 
-    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 def test_list_api_keys_returns_only_owner_keys(
@@ -103,6 +105,7 @@ def test_list_api_keys_returns_only_owner_keys(
     authentication_key = api_key_factory(
         user_id=first_user["id"],
         name="Auth key",
+        scopes=("api-keys:read",),
     )
 
     second_first_user_key = api_key_factory(
@@ -120,7 +123,7 @@ def test_list_api_keys_returns_only_owner_keys(
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert response.status_code == (status.HTTP_200_OK)
+    assert response.status_code == status.HTTP_200_OK
 
     data = response.json()
 
@@ -149,6 +152,7 @@ def test_revoke_api_key(
 
     authentication_key = api_key_factory(
         user_id=user["id"],
+        scopes=("api-keys:write",),
     )
 
     target_key = api_key_factory(
@@ -157,11 +161,11 @@ def test_revoke_api_key(
     )
 
     response = client.post(
-        (f"/api/v1/api-keys/{target_key.api_key.key_id}/revoke"),
+        f"/api/v1/api-keys/{target_key.api_key.key_id}/revoke",
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert response.status_code == (status.HTTP_200_OK)
+    assert response.status_code == status.HTTP_200_OK
 
     data = response.json()
 
@@ -189,6 +193,7 @@ def test_cannot_revoke_another_users_api_key(
 
     authentication_key = api_key_factory(
         user_id=first_user["id"],
+        scopes=("api-keys:write",),
     )
 
     foreign_key = api_key_factory(
@@ -196,13 +201,13 @@ def test_cannot_revoke_another_users_api_key(
     )
 
     response = client.post(
-        (f"/api/v1/api-keys/{foreign_key.api_key.key_id}/revoke"),
+        f"/api/v1/api-keys/{foreign_key.api_key.key_id}/revoke",
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert response.status_code == (status.HTTP_404_NOT_FOUND)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    assert response.json()["error"]["code"] == ("API_KEY_NOT_FOUND")
+    assert response.json()["error"]["code"] == "API_KEY_NOT_FOUND"
 
 
 def test_revoke_already_revoked_api_key_returns_409(
@@ -214,6 +219,7 @@ def test_revoke_already_revoked_api_key_returns_409(
 
     authentication_key = api_key_factory(
         user_id=user["id"],
+        scopes=("api-keys:write",),
     )
 
     target_key = api_key_factory(
@@ -227,14 +233,14 @@ def test_revoke_already_revoked_api_key_returns_409(
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert first_response.status_code == (status.HTTP_200_OK)
+    assert first_response.status_code == status.HTTP_200_OK
 
     second_response = client.post(
         url,
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert second_response.status_code == (status.HTTP_409_CONFLICT)
+    assert second_response.status_code == status.HTTP_409_CONFLICT
 
     assert second_response.json()["error"]["code"] == "API_KEY_ALREADY_REVOKED"
 
@@ -248,20 +254,21 @@ def test_api_key_can_revoke_itself(
 
     authentication_key = api_key_factory(
         user_id=user["id"],
+        scopes=("api-keys:write",),
     )
 
     response = client.post(
-        (f"/api/v1/api-keys/{authentication_key.api_key.key_id}/revoke"),
+        f"/api/v1/api-keys/{authentication_key.api_key.key_id}/revoke",
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert response.status_code == (status.HTTP_200_OK)
+    assert response.status_code == status.HTTP_200_OK
 
     next_response = client.get(
         "/api/v1/auth/me",
         headers=auth_headers(authentication_key.raw_key),
     )
 
-    assert next_response.status_code == (status.HTTP_401_UNAUTHORIZED)
+    assert next_response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    assert next_response.json()["error"]["code"] == ("API_KEY_REVOKED")
+    assert next_response.json()["error"]["code"] == "API_KEY_REVOKED"

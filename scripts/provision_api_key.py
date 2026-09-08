@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.config import settings
 from app.database import SessionLocal
+from app.security.scopes import APIKeyScope
 from app.services.api_keys import (
     APIKeyGenerationError,
     APIKeyOwnerNotFoundError,
@@ -44,6 +45,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
 
+    parser.add_argument(
+        "--scope",
+        action="append",
+        choices=[scope.value for scope in APIKeyScope],
+        default=[],
+        help=("Scope granted to the API Key. Can be provided multiple times."),
+    )
+
     return parser
 
 
@@ -64,6 +73,7 @@ def main() -> int:
                 name=args.name,
                 pepper=(settings.api_key_pepper.get_secret_value()),
                 expires_at=expires_at,
+                scopes=args.scope,
             )
 
         except (

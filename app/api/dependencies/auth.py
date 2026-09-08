@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, status
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import APIError, ErrorCode
 from app.config import settings
 from app.database import get_db
+from app.security.scopes import APIKeyScope
 from app.services import api_keys as api_key_service
 
 api_key_header = APIKeyHeader(
@@ -81,3 +83,29 @@ CurrentAPIKey = Annotated[
     api_key_service.AuthenticatedAPIKey,
     Depends(get_current_api_key),
 ]
+
+
+def require_scopes(
+    *required_scopes: APIKeyScope,
+) -> Callable[
+    ...,
+    api_key_service.AuthenticatedAPIKey,
+]:
+    required_scope_values = frozenset(scope.value for scope in required_scopes)
+
+    def dependency(
+        current_api_key: CurrentAPIKey,
+    ) -> api_key_service.AuthenticatedAPIKey:
+        missing_scopes = sorted(required_scope_values - current_api_key.scopes)
+
+        if missing_scopes:
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code=ErrorCode.INSUFFICIENT_SCOPE,
+                message=("La API Key no tiene los scopes requeridos"),
+                details=[{"missing_scopes": (missing_scopes)}],
+            )
+
+        return current_api_key
+
+    return dependency

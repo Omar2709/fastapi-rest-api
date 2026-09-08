@@ -107,6 +107,7 @@ def test_auth_accepts_valid_api_key(
         "user_id": user["id"],
         "key_id": api_key.api_key.key_id,
         "api_key_name": "Local development",
+        "scopes": [],
     }
 
 

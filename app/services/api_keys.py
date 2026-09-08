@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -13,6 +14,7 @@ from app.security.api_keys import (
     generate_api_key,
     verify_api_key,
 )
+from app.security.scopes import APIKeyScope
 
 API_KEY_ID_UNIQUE_CONSTRAINT = "api_keys_key_id_key"
 MAX_API_KEY_GENERATION_ATTEMPTS = 3
@@ -62,6 +64,10 @@ class APIKeyNotFoundError(LookupError):
 
 
 class APIKeyAlreadyRevokedError(RuntimeError):
+    pass
+
+
+class InvalidAPIKeyScopeError(ValueError):
     pass
 
 
@@ -121,6 +127,7 @@ def provision_api_key(
     name: str,
     pepper: str,
     expires_at: datetime | None = None,
+    scopes: Iterable[APIKeyScope | str] = (),
 ) -> ProvisionedAPIKey:
     user = db.get(User, user_id)
 
@@ -130,6 +137,8 @@ def provision_api_key(
     normalized_name = _normalize_name(name)
 
     _validate_expiration(expires_at)
+
+    normalized_scopes = _normalize_scopes(scopes)
 
     for _ in range(MAX_API_KEY_GENERATION_ATTEMPTS):
         generated = generate_api_key()
@@ -145,6 +154,7 @@ def provision_api_key(
             key_id=generated.key_id,
             key_digest=key_digest,
             expires_at=expires_at,
+            scopes=normalized_scopes,
         )
 
         db.add(api_key)
@@ -176,6 +186,7 @@ class AuthenticatedAPIKey:
     key_id: str
     user_id: int
     name: str
+    scopes: frozenset[str]
     last_used_at: datetime | None
 
 
@@ -232,6 +243,7 @@ def authenticate_api_key(
         user_id=api_key.user_id,
         name=api_key.name,
         last_used_at=api_key.last_used_at,
+        scopes=frozenset(api_key.scopes),
     )
 
 
@@ -297,3 +309,22 @@ def revoke_api_key(
         raise APIKeyNotFoundError("API Key no encontrada")
 
     return api_key
+
+
+def _normalize_scopes(
+    scopes: Iterable[APIKeyScope | str],
+) -> list[str]:
+    normalized_scopes: set[str] = set()
+
+    for scope in scopes:
+        value = scope.value if isinstance(scope, APIKeyScope) else scope
+
+        try:
+            normalized_scope = APIKeyScope(value)
+
+        except ValueError as exc:
+            raise InvalidAPIKeyScopeError(f"Scope no soportado: {value}") from exc
+
+        normalized_scopes.add(normalized_scope.value)
+
+    return sorted(normalized_scopes)
