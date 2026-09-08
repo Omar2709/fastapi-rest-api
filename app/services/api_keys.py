@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -54,6 +54,14 @@ class ExpiredAPIKeyError(APIKeyAuthenticationError):
 
 
 class InactiveAPIKeyOwnerError(APIKeyAuthenticationError):
+    pass
+
+
+class APIKeyNotFoundError(LookupError):
+    pass
+
+
+class APIKeyAlreadyRevokedError(RuntimeError):
     pass
 
 
@@ -225,3 +233,67 @@ def authenticate_api_key(
         name=api_key.name,
         last_used_at=api_key.last_used_at,
     )
+
+
+def list_api_keys(
+    db: Session,
+    *,
+    user_id: int,
+) -> list[ApiKey]:
+    statement = (
+        select(ApiKey)
+        .where(ApiKey.user_id == user_id)
+        .order_by(
+            ApiKey.created_at.desc(),
+            ApiKey.id.desc(),
+        )
+    )
+
+    return list(db.scalars(statement).all())
+
+
+def revoke_api_key(
+    db: Session,
+    *,
+    user_id: int,
+    key_id: str,
+) -> ApiKey:
+    now = datetime.now(UTC)
+
+    api_key_id = db.scalar(
+        update(ApiKey)
+        .where(
+            ApiKey.user_id == user_id,
+            ApiKey.key_id == key_id,
+            ApiKey.revoked_at.is_(None),
+        )
+        .values(
+            revoked_at=now,
+        )
+        .returning(ApiKey.id)
+    )
+
+    if api_key_id is None:
+        existing_api_key = db.scalar(
+            select(ApiKey).where(
+                ApiKey.user_id == user_id,
+                ApiKey.key_id == key_id,
+            )
+        )
+
+        if existing_api_key is None:
+            raise APIKeyNotFoundError("API Key no encontrada")
+
+        raise APIKeyAlreadyRevokedError("API Key ya revocada")
+
+    db.commit()
+
+    api_key = db.get(
+        ApiKey,
+        api_key_id,
+    )
+
+    if api_key is None:
+        raise APIKeyNotFoundError("API Key no encontrada")
+
+    return api_key

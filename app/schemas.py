@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import (
     BaseModel,
@@ -158,3 +158,64 @@ class AuthContextResponse(BaseModel):
     user_id: int
     key_id: str
     api_key_name: str
+
+
+class APIKeyCreate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+    name: str = Field(
+        min_length=1,
+        max_length=100,
+    )
+
+    expires_at: datetime | None = None
+
+    @field_validator(
+        "name",
+        mode="before",
+    )
+    @classmethod
+    def normalize_name(
+        cls,
+        value: object,
+    ) -> object:
+        if isinstance(value, str):
+            return value.strip()
+
+        return value
+
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expiration(
+        cls,
+        value: datetime | None,
+    ) -> datetime | None:
+        if value is None:
+            return None
+
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("expires_at debe incluir zona horaria")
+
+        if value <= datetime.now(UTC):
+            raise ValueError("expires_at debe estar en el futuro")
+
+        return value
+
+
+class APIKeyResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    key_id: str
+    name: str
+    created_at: datetime
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    last_used_at: datetime | None
+
+
+class APIKeyCreatedResponse(APIKeyResponse):
+    api_key: str

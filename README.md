@@ -50,6 +50,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Configuración](#configuración)
 - [Provisionamiento de API Keys](#provisionamiento-de-api-keys)
 - [Autenticación mediante API Key](#autenticación-mediante-api-key)
+- [Gestión de API Keys](#gestión-de-api-keys)
 - [Base de datos](#base-de-datos)
 - [Migraciones con Alembic](#migraciones-con-alembic)
 - [Ejecutar la API](#ejecutar-la-api)
@@ -127,24 +128,24 @@ El proyecto mantiene una separación sencilla por responsabilidades:
 
 ```text
 Cliente
-   |
-   | HTTP
-   v
+   |
+   | HTTP
+   v
 FastAPI / Routers
-   |
-   v
+   |
+   v
 Pydantic
-   |
-   v
+   |
+   v
 Services
-   |
-   v
+   |
+   v
 SQLAlchemy ORM
-   |
-   v
+   |
+   v
 Psycopg
-   |
-   v
+   |
+   v
 PostgreSQL
 ```
 
@@ -152,24 +153,24 @@ PostgreSQL
 
 ```text
 routers/
-    Manejo HTTP:
-    rutas, parámetros, códigos de estado y traducción de errores a APIError.
+    Manejo HTTP:
+    rutas, parámetros, códigos de estado y traducción de errores a APIError.
 services/
-    Lógica de aplicación y operaciones con SQLAlchemy.
+    Lógica de aplicación y operaciones con SQLAlchemy.
 schemas.py
-    Modelos Pydantic para datos de entrada y salida.
+    Modelos Pydantic para datos de entrada y salida.
 models.py
-    Modelos ORM que representan las tablas de PostgreSQL.
+    Modelos ORM que representan las tablas de PostgreSQL.
 database.py
-    Engine, Session y conexión con la base de datos.
+    Engine, Session y conexión con la base de datos.
 config.py
-    Configuración cargada desde variables de entorno.
+    Configuración cargada desde variables de entorno.
 api/errors.py
-    Contrato transversal de errores, códigos estables y handlers globales.
+    Contrato transversal de errores, códigos estables y handlers globales.
 migrations/
-    Historial de cambios del esquema administrado por Alembic.
+    Historial de cambios del esquema administrado por Alembic.
 tests/
-    Pruebas automatizadas y fixtures de testing.
+    Pruebas automatizadas y fixtures de testing.
 ```
 
 ---
@@ -182,43 +183,43 @@ La estructura actual es similar a:
 fastapi-rest-api/
 |
 ├── app/
-│   ├── __init__.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── errors.py
-│   │   └── v1/
-│   │       ├── __init__.py
-│   │       └── router.py
-│   │
-│   ├── main.py
-│   ├── config.py
-│   ├── database.py
-│   ├── models.py
-│   ├── schemas.py
-│   │
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   ├── users.py
-│   │   └── tasks.py
-│   │
-│   └── services/
-│       ├── __init__.py
-│       ├── users.py
-│       └── tasks.py
+│   ├── __init__.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── errors.py
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       └── router.py
+│   │
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── models.py
+│   ├── schemas.py
+│   │
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── users.py
+│   │   └── tasks.py
+│   │
+│   └── services/
+│       ├── __init__.py
+│       ├── users.py
+│       └── tasks.py
 │
 ├── migrations/
-│   ├── versions/
-│   ├── env.py
-│   └── script.py.mako
+│   ├── versions/
+│   ├── env.py
+│   └── script.py.mako
 │
 ├── sql/
-│   └── 01_users.sql
+│   └── 01_users.sql
 │
 ├── tests/
-│   ├── conftest.py
-│   ├── test_main.py
-│   ├── test_tasks.py
-│   └── test_users.py
+│   ├── conftest.py
+│   ├── test_main.py
+│   ├── test_tasks.py
+│   └── test_users.py
 │
 ├── .env
 ├── .env.example
@@ -248,13 +249,13 @@ Las herramientas utilizadas exclusivamente durante desarrollo, como `pytest` y R
 Actualmente existen tres recursos relacionados:
 
 ```text
-         User
-         /    \
-       1/      \1
-       /        \
-     N/          \N
-     v            v
-   Task         ApiKey
+         User
+         /    \\
+       1/      \1
+       /        \\
+     N/          \N
+     v            v
+   Task         ApiKey
 ```
 
 Un usuario puede tener muchas tareas y muchas API Keys; cada tarea y cada API Key pertenecen a un único usuario.
@@ -373,6 +374,14 @@ El CRUD básico de `Task` está completo.
 
 Las actualizaciones mediante `PATCH` modifican únicamente los campos enviados por el cliente. Campos controlados por la aplicación como `id`, `created_at` y `user_id` no forman parte del esquema de actualización.
 
+### API Keys
+
+| Método | Endpoint | Descripción |
+| --- | --- | --- |
+| `POST` | `/api/v1/api-keys` | Crear una API Key para el usuario autenticado |
+| `GET` | `/api/v1/api-keys` | Listar las API Keys del usuario autenticado |
+| `POST` | `/api/v1/api-keys/{key_id}/revoke` | Revocar una API Key del usuario autenticado |
+
 ---
 
 ## Versionado de la API
@@ -386,9 +395,9 @@ Los endpoints de negocio se publican bajo un prefijo de versión:
 Por ejemplo:
 
 ```text
-GET  /api/v1/users
+GET  /api/v1/users
 POST /api/v1/users
-GET  /api/v1/tasks/{task_id}
+GET  /api/v1/tasks/{task_id}
 ```
 
 El versionado permite evolucionar el contrato HTTP de la API sin introducir cambios incompatibles directamente sobre los endpoints existentes.
@@ -410,21 +419,21 @@ La versión definida en `FastAPI(version="0.1.0")` representa la versión del so
 
 ```text
 200 OK
-    Operación realizada correctamente.
+    Operación realizada correctamente.
 201 Created
-    Se creó un nuevo recurso.
+    Se creó un nuevo recurso.
 204 No Content
-    El recurso fue eliminado correctamente.
+    El recurso fue eliminado correctamente.
 401 Unauthorized
-    La solicitud no incluye una credencial válida para acceder al recurso protegido.
+    La solicitud no incluye una credencial válida para acceder al recurso protegido.
 404 Not Found
-    El recurso solicitado no existe.
+    El recurso solicitado no existe.
 405 Method Not Allowed
-    El método HTTP no está permitido para la ruta solicitada.
+    El método HTTP no está permitido para la ruta solicitada.
 409 Conflict
-    La operación entra en conflicto con el estado actual de los datos.
+    La operación entra en conflicto con el estado actual de los datos.
 422 Unprocessable Entity
-    Los datos enviados no cumplen las validaciones esperadas.
+    Los datos enviados no cumplen las validaciones esperadas.
 ```
 
 Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`.
@@ -439,11 +448,11 @@ Los errores de la API utilizan una estructura uniforme:
 
 ```json
 {
-  "error": {
-    "code": "USER_NOT_FOUND",
-    "message": "Usuario no encontrado",
-    "details": null
-  }
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "Usuario no encontrado",
+    "details": null
+  }
 }
 ```
 
@@ -477,17 +486,17 @@ Los errores de validación utilizan el código `VALIDATION_ERROR` y pueden inclu
 
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Los datos enviados no son válidos",
-    "details": [
-      {
-        "field": "body.email",
-        "message": "valor inválido",
-        "type": "value_error"
-      }
-    ]
-  }
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Los datos enviados no son válidos",
+    "details": [
+      {
+        "field": "body.email",
+        "message": "valor inválido",
+        "type": "value_error"
+      }
+    ]
+  }
 }
 ```
 
@@ -602,7 +611,7 @@ uv tree
 ### Ejecutar comandos del proyecto
 
 ```bash
-uv run <comando>
+uv run \<comando>
 ```
 
 Ejemplo:
@@ -646,7 +655,7 @@ No existe un endpoint público sin autenticación para crear credenciales.
 La aplicación requiere:
 
 ```env
-API_KEY_PEPPER=<secret>
+API_KEY_PEPPER=\<secret>
 ```
 
 El pepper debe generarse mediante una fuente criptográficamente segura y nunca debe versionarse.
@@ -656,18 +665,18 @@ La API Key completa tampoco se almacena en PostgreSQL. La base de datos conserva
 ### Provisionar una API Key
 
 ```bash
-uv run python -m scripts.provision_api_key \
-    --user-id 1 \
-    --name "Local development"
+uv run python -m scripts.provision_api_key \\
+    --user-id 1 \\
+    --name "Local development"
 ```
 
 También puede establecerse una expiración:
 
 ```bash
-uv run python -m scripts.provision_api_key \
-    --user-id 1 \
-    --name "Temporary integration" \
-    --expires-in-days 90
+uv run python -m scripts.provision_api_key \\
+    --user-id 1 \\
+    --name "Temporary integration" \\
+    --expires-in-days 90
 ```
 
 La credencial completa se muestra únicamente durante el provisionamiento y debe tratarse como un secreto.
@@ -679,17 +688,22 @@ La credencial completa se muestra únicamente durante el provisionamiento y debe
 Los endpoints protegidos utilizan una API Key enviada mediante el header:
 
 ```http
-X-API-Key: <api-key>
+X-API-Key: \<api-key>
 ```
 
 Las API Keys se validan mediante:
 
-1. extracción del identificador público `key_id`;
-2. búsqueda de la credencial en PostgreSQL;
-3. verificación criptográfica del digest HMAC;
-4. comprobación de revocación;
-5. comprobación de expiración;
-6. comprobación del estado del propietario.
+1\. extracción del identificador público `key_id`;
+
+2\. búsqueda de la credencial en PostgreSQL;
+
+3\. verificación criptográfica del digest HMAC;
+
+4\. comprobación de revocación;
+
+5\. comprobación de expiración;
+
+6\. comprobación del estado del propietario.
 
 Las credenciales inválidas devuelven `401 Unauthorized`.
 
@@ -697,11 +711,11 @@ Ejemplo:
 
 ```json
 {
-  "error": {
-    "code": "API_KEY_INVALID",
-    "message": "API Key inválida",
-    "details": null
-  }
+  "error": {
+    "code": "API_KEY_INVALID",
+    "message": "API Key inválida",
+    "details": null
+  }
 }
 ```
 
@@ -720,6 +734,17 @@ El header de respuesta `WWW-Authenticate: APIKey` acompaña los errores de auten
 El esquema de seguridad está integrado con OpenAPI, por lo que Swagger UI reconoce la API Key mediante el header `X-API-Key`.
 
 `last_used_at` se actualiza de forma limitada para evitar escribir en PostgreSQL en cada request.
+
+---
+
+## Gestión de API Keys
+
+Una API Key autenticada puede crear, listar y revocar únicamente las credenciales pertenecientes a su propio usuario.
+
+- La credencial completa solo se devuelve al crear una API Key.
+- Los listados nunca incluyen la credencial completa ni su digest.
+- El propietario se obtiene de la API Key autenticada; el cliente no puede enviar `user_id` para administrar credenciales de terceros.
+- La revocación conserva la fila en PostgreSQL mediante `revoked_at` para mantener información de auditoría.
 
 ---
 
@@ -796,13 +821,13 @@ uv run alembic upgrade head
 ### Regla del proyecto
 
 ```text
-Cambio en endpoints        -> no requiere migración
-Cambio en services         -> no requiere migración
-Cambio en validaciones     -> normalmente no requiere migración
-Nueva tabla                -> requiere migración
-Nueva columna              -> requiere migración
-Nueva foreign key          -> requiere migración
-Cambio del esquema SQL     -> requiere migración
+Cambio en endpoints        -> no requiere migración
+Cambio en services         -> no requiere migración
+Cambio en validaciones     -> normalmente no requiere migración
+Nueva tabla                -> requiere migración
+Nueva columna              -> requiere migración
+Nueva foreign key          -> requiere migración
+Cambio del esquema SQL     -> requiere migración
 ```
 
 ---
@@ -840,8 +865,8 @@ Swagger permite probar directamente los endpoints desde el navegador.
 POST /api/v1/users
 Content-Type: application/json
 {
-  "name": "Ana",
-  "email": "ana@example.com"
+  "name": "Ana",
+  "email": "ana@example.com"
 }
 ```
 
@@ -849,11 +874,11 @@ Respuesta aproximada:
 
 ```json
 {
-  "id": 1,
-  "name": "Ana",
-  "email": "ana@example.com",
-  "created_at": "2026-01-01T12:00:00Z",
-  "is_active": true
+  "id": 1,
+  "name": "Ana",
+  "email": "ana@example.com",
+  "created_at": "2026-01-01T12:00:00Z",
+  "is_active": true
 }
 ```
 
@@ -863,7 +888,7 @@ Respuesta aproximada:
 PATCH /api/v1/users/1
 Content-Type: application/json
 {
-  "is_active": false
+  "is_active": false
 }
 ```
 
@@ -875,8 +900,8 @@ Solo los campos enviados son modificados.
 POST /api/v1/users/1/tasks
 Content-Type: application/json
 {
-  "title": "Aprender relaciones",
-  "description": "Estudiar ForeignKey y relationship"
+  "title": "Aprender relaciones",
+  "description": "Estudiar ForeignKey y relationship"
 }
 ```
 
@@ -886,7 +911,7 @@ Content-Type: application/json
 PATCH /api/v1/tasks/1
 Content-Type: application/json
 {
-  "is_completed": true
+  "is_completed": true
 }
 ```
 
@@ -894,7 +919,7 @@ También es posible enviar explícitamente `null` en campos opcionales:
 
 ```json
 {
-  "description": null
+  "description": null
 }
 ```
 
@@ -933,17 +958,17 @@ Conceptualmente:
 
 ```text
 JSON
- |
- v
+ |
+ v
 TaskUpdate
- |
- v
+ |
+ v
 Service
- |
- v
+ |
+ v
 SQLAlchemy Model
- |
- v
+ |
+ v
 PostgreSQL
 ```
 
@@ -1127,9 +1152,9 @@ uv run pytest --cov=app --cov-report=term-missing
 El resultado esperado es conceptualmente:
 
 ```text
-Ruff lint       ✅
-Ruff format     ✅
-Tests           ✅
+Ruff lint       ✅
+Ruff format     ✅
+Tests           ✅
 ```
 
 Este conjunto de comandos define el **contrato de calidad local** del proyecto.
@@ -1180,23 +1205,23 @@ El desarrollo se organiza en bloques funcionales. Después de completar y compro
 
 ```text
 Bloque funcional
-    |
-    v
+    |
+    v
 Ruff lint
-    |
-    v
+    |
+    v
 Ruff format check
-    |
-    v
+    |
+    v
 Tests + coverage
-    |
-    v
+    |
+    v
 Revisar git diff
-    |
-    v
+    |
+    v
 Conventional Commit
-    |
-    v
+    |
+    v
 Push
 ```
 
@@ -1213,7 +1238,7 @@ git diff
 Después:
 
 ```bash
-git add <archivos>
+git add \<archivos>
 git commit -m "type(scope): short description"
 git push
 ```
@@ -1243,16 +1268,16 @@ Los scopes son opcionales y se utilizan cuando ayudan a identificar el área afe
 Los tipos utilizados habitualmente son:
 
 ```text
-feat      nueva funcionalidad o capacidad
-fix       corrección de un bug
-refactor  cambio interno sin modificar el comportamiento esperado
-test      tests o infraestructura de testing
-docs      documentación
-ci        integración continua o pipelines
-perf      mejoras de rendimiento
-chore     mantenimiento general
-build     dependencias, packaging o build
-style     cambios de formato sin alterar lógica
+feat      nueva funcionalidad o capacidad
+fix       corrección de un bug
+refactor  cambio interno sin modificar el comportamiento esperado
+test      tests o infraestructura de testing
+docs      documentación
+ci        integración continua o pipelines
+perf      mejoras de rendimiento
+chore     mantenimiento general
+build     dependencias, packaging o build
+style     cambios de formato sin alterar lógica
 ```
 
 El tipo representa el propósito principal del commit. Los tests y la documentación que acompañan a una nueva funcionalidad no requieren tipos adicionales en el mismo mensaje.
@@ -1328,11 +1353,15 @@ Nunca debe incluirse `.env`.
 - [x] Rechazo de credenciales pertenecientes a usuarios inactivos.
 - [x] Integración de API Key authentication con OpenAPI.
 - [x] Seguimiento limitado mediante `last_used_at`.
+- [x] Creación autenticada de API Keys.
+- [x] Listado privado de API Keys.
+- [x] Revocación de API Keys.
+- [x] Aislamiento de credenciales por propietario.
+- [x] Raw API Key visible únicamente durante su creación.
 
 ### Próximos pasos
 
 - [ ] Integrar Ruff y pytest en GitHub Actions.
-
 - [ ] Añadir scopes y autorización basada en scopes para API Keys.
 - [ ] Introducir el dominio de procesamiento de Jobs.
 - [ ] Implementar estados y transiciones de Jobs.
