@@ -153,6 +153,13 @@ def delete_user(
             user,
         )
 
+    except user_service.UserHasJobsError as exc:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code=ErrorCode.USER_HAS_JOBS,
+            message=("No se puede eliminar el usuario porque tiene Jobs asociados"),
+        ) from exc
+
     except user_service.UserHasTasksError as exc:
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,

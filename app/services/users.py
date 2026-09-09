@@ -14,6 +14,10 @@ class UserHasTasksError(Exception):
     pass
 
 
+class UserHasJobsError(Exception):
+    pass
+
+
 def get_users(
     db: Session,
     limit: int,
@@ -109,6 +113,21 @@ def delete_user(
         )
 
         if sqlstate in {"23001", "23503"}:
+            diag = getattr(
+                exc.orig,
+                "diag",
+                None,
+            )
+
+            constraint_name = getattr(
+                diag,
+                "constraint_name",
+                None,
+            )
+
+            if constraint_name == "fk_jobs_user_id_users":
+                raise UserHasJobsError from exc
+
             raise UserHasTasksError from exc
 
         raise

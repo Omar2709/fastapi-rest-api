@@ -34,6 +34,8 @@ class ErrorCode(StrEnum):
 
     API_KEY_LIMIT_REACHED = "API_KEY_LIMIT_REACHED"
 
+    USER_HAS_JOBS = "USER_HAS_JOBS"
+
 
 class ValidationErrorDetail(BaseModel):
     field: str

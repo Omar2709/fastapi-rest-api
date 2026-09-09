@@ -1,6 +1,9 @@
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models import Job
 
 
 def test_create_user(
@@ -350,3 +353,32 @@ def test_delete_user_with_tasks_returns_409(
     get_response = client.get(f"/api/v1/users/{user['id']}")
 
     assert get_response.status_code == (status.HTTP_200_OK)
+
+
+def test_delete_user_with_jobs_returns_409(
+    client: TestClient,
+    db_session: Session,
+    user_factory,
+) -> None:
+    user = user_factory()
+
+    job = Job(
+        user_id=user["id"],
+        job_type="generate_report",
+        payload={},
+    )
+
+    db_session.add(job)
+    db_session.commit()
+
+    response = client.delete(f"/api/v1/users/{user['id']}")
+
+    assert response.status_code == (status.HTTP_409_CONFLICT)
+
+    assert response.json() == {
+        "error": {
+            "code": "USER_HAS_JOBS",
+            "message": ("No se puede eliminar el usuario porque tiene Jobs asociados"),
+            "details": None,
+        }
+    }

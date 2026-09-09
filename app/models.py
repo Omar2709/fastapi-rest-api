@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
@@ -9,14 +11,20 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Integer,
     String,
+    Text,
     UniqueConstraint,
+    Uuid,
     false,
     func,
     text,
     true,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
@@ -24,6 +32,7 @@ from sqlalchemy.orm import (
 )
 
 from app.database import Base
+from app.domain.jobs import JobStatus
 
 
 class User(Base):
@@ -73,6 +82,11 @@ class User(Base):
     api_keys: Mapped[list[ApiKey]] = relationship(
         back_populates="user",
         cascade="all, delete",
+        passive_deletes=True,
+    )
+
+    jobs: Mapped[list[Job]] = relationship(
+        back_populates="user",
         passive_deletes=True,
     )
 
@@ -205,4 +219,111 @@ class ApiKey(Base):
         nullable=False,
         default=list,
         server_default=text("'{}'::character varying[]"),
+    )
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(trim(job_type)) >= 1",
+            name="jobs_type_not_blank_check",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="jobs_attempts_non_negative_check",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "users.id",
+            name="fk_jobs_user_id_users",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    job_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    status: Mapped[JobStatus] = mapped_column(
+        SQLEnum(
+            JobStatus,
+            name="jobs_status_check",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            values_callable=lambda enum_class: [member.value for member in enum_class],
+            length=20,
+        ),
+        nullable=False,
+        default=JobStatus.PENDING,
+        server_default=JobStatus.PENDING.value,
+        index=True,
+    )
+
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    result: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    error_code: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    queued_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[User] = relationship(
+        back_populates="jobs",
     )

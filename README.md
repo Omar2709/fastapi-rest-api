@@ -52,7 +52,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Autenticación mediante API Key](#autenticación-mediante-api-key)
 - [Gestión de API Keys](#gestión-de-api-keys)
 - [Scopes y autorización](#scopes-y-autorización)
-- [Jobs](#jobs)
+- [Jobs](#procesamiento-de-jobs)
 - [Base de datos](#base-de-datos)
 - [Migraciones con Alembic](#migraciones-con-alembic)
 - [Ejecutar la API](#ejecutar-la-api)
@@ -248,19 +248,16 @@ Las herramientas utilizadas exclusivamente durante desarrollo, como `pytest` y R
 
 ## Modelo de datos
 
-Actualmente existen tres recursos relacionados:
+Actualmente existen cuatro recursos relacionados:
 
 ```text
-         User
-         /    \
-       1/      \1
-       /        \
-     N/          \N
-     v            v
-   Task         ApiKey
+              User
+           /    |    \
+          v     v     v
+        Task  ApiKey  Job
 ```
 
-Un usuario puede tener muchas tareas y muchas API Keys; cada tarea y cada API Key pertenecen a un único usuario.
+Un usuario puede tener muchas tareas, muchas API Keys y muchos Jobs; cada Task, ApiKey y Job pertenece a un único usuario.
 
 ### `users`
 
@@ -336,6 +333,34 @@ Características principales:
 - `last_used_at` registra el uso reciente de la credencial mediante actualizaciones limitadas para evitar una escritura en PostgreSQL por cada request.
 - `scopes` persiste los permisos granulares concedidos a la credencial.
 - La relación utiliza `ON DELETE CASCADE`, por lo que las credenciales desaparecen si se elimina su propietario.
+
+### `jobs`
+
+Los Jobs representan unidades de trabajo destinadas a procesamiento asíncrono.
+
+Campos principales:
+
+```text
+id
+user_id
+job_type
+status
+payload
+result
+error_code
+error_message
+attempts
+created_at
+queued_at
+started_at
+completed_at
+```
+
+Los Jobs utilizan UUID como identificador público y PostgreSQL `JSONB` para payloads y resultados estructurados.
+
+El estado se persiste como `VARCHAR` protegido mediante una `CHECK constraint`, evitando depender de un ENUM nativo de PostgreSQL.
+
+Los Jobs utilizan `ON DELETE RESTRICT` respecto a su propietario para preservar el historial de procesamiento.
 
 ---
 
@@ -705,10 +730,15 @@ X-API-Key: <api-key>
 Las API Keys se validan mediante:
 
 1. extracción del identificador público `key_id`;
+
 2. búsqueda de la credencial en PostgreSQL;
+
 3. verificación criptográfica del digest HMAC;
+
 4. comprobación de revocación;
+
 5. comprobación de expiración;
+
 6. comprobación del estado del propietario.
 
 Las credenciales inválidas devuelven `401 Unauthorized`.
@@ -813,7 +843,7 @@ Además, una API Key no puede crear otra credencial con permisos que ella misma 
 
 ---
 
-## Jobs
+## Procesamiento de Jobs
 
 El dominio principal del proyecto evoluciona hacia procesamiento asíncrono mediante Jobs.
 
@@ -964,6 +994,7 @@ Swagger permite probar directamente los endpoints desde el navegador.
 ```http
 POST /api/v1/users
 Content-Type: application/json
+
 {
   "name": "Ana",
   "email": "ana@example.com"
@@ -987,6 +1018,7 @@ Respuesta aproximada:
 ```http
 PATCH /api/v1/users/1
 Content-Type: application/json
+
 {
   "is_active": false
 }
@@ -999,6 +1031,7 @@ Solo los campos enviados son modificados.
 ```http
 POST /api/v1/users/1/tasks
 Content-Type: application/json
+
 {
   "title": "Aprender relaciones",
   "description": "Estudiar ForeignKey y relationship"
@@ -1010,6 +1043,7 @@ Content-Type: application/json
 ```http
 PATCH /api/v1/tasks/1
 Content-Type: application/json
+
 {
   "is_completed": true
 }
@@ -1473,6 +1507,13 @@ Nunca debe incluirse `.env`.
 - [x] Máquina de estados de Jobs.
 - [x] Validación de transiciones de estado.
 - [x] Tests unitarios de reglas de transición.
+- [x] Persistencia PostgreSQL para Jobs.
+- [x] Identificadores UUID para Jobs.
+- [x] Payload y resultado mediante PostgreSQL JSONB.
+- [x] Constraint persistente para estados de Job.
+- [x] Métrica de intentos de procesamiento.
+- [x] Timestamps del ciclo de vida de Jobs.
+- [x] Integridad `User 1:N Job`.
 
 ### Próximos pasos
 
