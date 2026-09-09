@@ -4,6 +4,7 @@ from fastapi import (
     APIRouter,
     Depends,
     Path,
+    Response,
     status,
 )
 from sqlalchemy.orm import Session
@@ -83,12 +84,21 @@ APIKeyId = Annotated[
             "model": ErrorResponse,
             "description": "API Key creation error",
         },
+        status.HTTP_403_FORBIDDEN: {
+            "model": ErrorResponse,
+            "description": "Insufficient scope",
+        },
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "API Key limit reached",
+        },
     },
 )
 def create_api_key(
     api_key_data: APIKeyCreate,
     current_api_key: APIKeysWriter,
     db: DbSession,
+    response: Response,
 ) -> APIKeyCreatedResponse:
     requested_scopes = {scope.value for scope in api_key_data.scopes}
 
@@ -112,6 +122,7 @@ def create_api_key(
             user_id=current_api_key.user_id,
             name=api_key_data.name,
             pepper=settings.api_key_pepper.get_secret_value(),
+            max_active_keys=(settings.api_key_max_active_per_user),
             expires_at=api_key_data.expires_at,
             scopes=api_key_data.scopes,
         )
@@ -140,6 +151,16 @@ def create_api_key(
             message="No fue posible crear la API Key",
         ) from exc
 
+    except api_key_service.APIKeyLimitReachedError as exc:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code=ErrorCode.API_KEY_LIMIT_REACHED,
+            message="Se alcanzó el límite de API Keys activas",
+            details=[{"limit": (settings.api_key_max_active_per_user)}],
+        ) from exc
+
+    response.headers["Cache-Control"] = "no-store"
+
     return APIKeyCreatedResponse(
         key_id=result.api_key.key_id,
         name=result.api_key.name,
@@ -162,7 +183,11 @@ def create_api_key(
         status.HTTP_401_UNAUTHORIZED: {
             "model": ErrorResponse,
             "description": "Authentication error",
-        }
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "model": ErrorResponse,
+            "description": "Insufficient scope",
+        },
     },
 )
 def get_api_keys(
@@ -189,6 +214,10 @@ def get_api_keys(
         status.HTTP_401_UNAUTHORIZED: {
             "model": ErrorResponse,
             "description": "Authentication error",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "model": ErrorResponse,
+            "description": "Insufficient scope",
         },
         status.HTTP_404_NOT_FOUND: {
             "model": ErrorResponse,

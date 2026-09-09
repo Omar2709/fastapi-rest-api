@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from threading import Barrier
 
 import pytest
 from sqlalchemy.orm import Session
@@ -39,6 +41,7 @@ def test_provision_api_key_persists_digest(
         user_id=user.id,
         name="Local development",
         pepper=TEST_PEPPER,
+        max_active_keys=10,
     )
 
     stored_api_key = db_session.get(
@@ -74,6 +77,7 @@ def test_provision_api_key_normalizes_name(
         user_id=user.id,
         name="  Local development  ",
         pepper=TEST_PEPPER,
+        max_active_keys=10,
     )
 
     assert result.api_key.name == "Local development"
@@ -88,6 +92,7 @@ def test_provision_api_key_for_nonexistent_user_fails(
             user_id=999999999,
             name="Test key",
             pepper=TEST_PEPPER,
+            max_active_keys=10,
         )
 
 
@@ -111,6 +116,7 @@ def test_provision_api_key_rejects_invalid_name(
             user_id=user.id,
             name=name,
             pepper=TEST_PEPPER,
+            max_active_keys=10,
         )
 
 
@@ -126,6 +132,7 @@ def test_provision_api_key_accepts_future_expiration(
         user_id=user.id,
         name="Temporary key",
         pepper=TEST_PEPPER,
+        max_active_keys=10,
         expires_at=expires_at,
     )
 
@@ -145,6 +152,7 @@ def test_provision_api_key_rejects_past_expiration(
             user_id=user.id,
             name="Expired key",
             pepper=TEST_PEPPER,
+            max_active_keys=10,
             expires_at=expires_at,
         )
 
@@ -162,6 +170,7 @@ def test_provision_api_key_rejects_naive_expiration(
             user_id=user.id,
             name="Invalid expiration",
             pepper=TEST_PEPPER,
+            max_active_keys=10,
             expires_at=expires_at,
         )
 
@@ -208,6 +217,7 @@ def test_provision_api_key_retries_key_id_collision(
         user_id=user.id,
         name="New key",
         pepper=TEST_PEPPER,
+        max_active_keys=10,
     )
 
     assert result.api_key.key_id == "c" * 24
@@ -246,4 +256,124 @@ def test_provision_api_key_fails_after_collisions(
             user_id=user.id,
             name="New key",
             pepper=TEST_PEPPER,
+            max_active_keys=10,
         )
+
+
+def test_provision_api_key_enforces_active_limit(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    api_key_service.provision_api_key(
+        db_session,
+        user_id=user.id,
+        name="First key",
+        pepper=TEST_PEPPER,
+        max_active_keys=1,
+    )
+
+    with pytest.raises(api_key_service.APIKeyLimitReachedError):
+        api_key_service.provision_api_key(
+            db_session,
+            user_id=user.id,
+            name="Second key",
+            pepper=TEST_PEPPER,
+            max_active_keys=1,
+        )
+
+
+def test_revoked_api_key_does_not_count_toward_limit(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    first = api_key_service.provision_api_key(
+        db_session,
+        user_id=user.id,
+        name="First key",
+        pepper=TEST_PEPPER,
+        max_active_keys=1,
+    )
+
+    first.api_key.revoked_at = datetime.now(UTC)
+    db_session.commit()
+
+    second = api_key_service.provision_api_key(
+        db_session,
+        user_id=user.id,
+        name="Second key",
+        pepper=TEST_PEPPER,
+        max_active_keys=1,
+    )
+
+    assert second.api_key.id != first.api_key.id
+
+
+def test_expired_api_key_does_not_count_toward_limit(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    first = api_key_service.provision_api_key(
+        db_session,
+        user_id=user.id,
+        name="Temporary key",
+        pepper=TEST_PEPPER,
+        max_active_keys=1,
+        expires_at=(datetime.now(UTC) + timedelta(days=1)),
+    )
+
+    first.api_key.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    db_session.commit()
+
+    second = api_key_service.provision_api_key(
+        db_session,
+        user_id=user.id,
+        name="Replacement key",
+        pepper=TEST_PEPPER,
+        max_active_keys=1,
+    )
+
+    assert second.api_key.id != first.api_key.id
+
+
+def test_concurrent_provisioning_respects_limit(
+    db_session: Session,
+    db_session_factory,
+) -> None:
+    user = create_user(db_session)
+
+    barrier = Barrier(2)
+
+    def provision() -> str:
+        with db_session_factory() as session:
+            barrier.wait()
+
+            try:
+                api_key_service.provision_api_key(
+                    session,
+                    user_id=user.id,
+                    name="Concurrent key",
+                    pepper=TEST_PEPPER,
+                    max_active_keys=1,
+                )
+
+            except api_key_service.APIKeyLimitReachedError:
+                return "limited"
+
+            return "created"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda _: provision(),
+                range(2),
+            )
+        )
+
+    assert sorted(results) == [
+        "created",
+        "limited",
+    ]

@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -71,6 +71,10 @@ class InvalidAPIKeyScopeError(ValueError):
     pass
 
 
+class APIKeyLimitReachedError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class ProvisionedAPIKey:
     api_key: ApiKey
@@ -120,24 +124,57 @@ def _is_key_id_collision(
     )
 
 
+def _lock_api_key_owner(
+    db: Session,
+    *,
+    user_id: int,
+) -> User:
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+
+    if user is None:
+        db.rollback()
+        raise APIKeyOwnerNotFoundError("Usuario no encontrado")
+
+    return user
+
+
+def _count_active_api_keys(
+    db: Session,
+    *,
+    user_id: int,
+    now: datetime,
+) -> int:
+    count = db.scalar(
+        select(func.count())
+        .select_from(ApiKey)
+        .where(
+            ApiKey.user_id == user_id,
+            ApiKey.revoked_at.is_(None),
+            or_(
+                ApiKey.expires_at.is_(None),
+                ApiKey.expires_at > now,
+            ),
+        )
+    )
+
+    return int(count or 0)
+
+
 def provision_api_key(
     db: Session,
     *,
     user_id: int,
     name: str,
     pepper: str,
+    max_active_keys: int,
     expires_at: datetime | None = None,
     scopes: Iterable[APIKeyScope | str] = (),
 ) -> ProvisionedAPIKey:
-    user = db.get(User, user_id)
-
-    if user is None:
-        raise APIKeyOwnerNotFoundError("Usuario no encontrado")
+    if max_active_keys < 1:
+        raise ValueError("max_active_keys debe ser mayor que cero")
 
     normalized_name = _normalize_name(name)
-
     _validate_expiration(expires_at)
-
     normalized_scopes = _normalize_scopes(scopes)
 
     for _ in range(MAX_API_KEY_GENERATION_ATTEMPTS):
@@ -147,6 +184,24 @@ def provision_api_key(
             generated.raw_key,
             pepper,
         )
+
+        _lock_api_key_owner(
+            db,
+            user_id=user_id,
+        )
+
+        now = datetime.now(UTC)
+
+        active_api_keys = _count_active_api_keys(
+            db,
+            user_id=user_id,
+            now=now,
+        )
+
+        if active_api_keys >= max_active_keys:
+            db.rollback()
+
+            raise APIKeyLimitReachedError("Se alcanzó el límite de API Keys activas")
 
         api_key = ApiKey(
             user_id=user_id,

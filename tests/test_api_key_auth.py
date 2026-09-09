@@ -248,3 +248,33 @@ def test_api_key_auth_is_documented_in_openapi(
     operation = schema["paths"]["/api/v1/auth/me"]["get"]
 
     assert {"ApiKeyAuth": []} in operation["security"]
+
+
+def test_unknown_key_and_wrong_secret_use_same_public_error(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+    )
+
+    unknown_response = client.get(
+        "/api/v1/auth/me",
+        headers={"X-API-Key": (f"fapi_{'a' * 24}_unknown-secret")},
+    )
+
+    wrong_secret_response = client.get(
+        "/api/v1/auth/me",
+        headers={"X-API-Key": (f"{api_key.raw_key}modified")},
+    )
+
+    assert unknown_response.status_code == (status.HTTP_401_UNAUTHORIZED)
+
+    assert wrong_secret_response.status_code == (status.HTTP_401_UNAUTHORIZED)
+
+    assert unknown_response.json() == (wrong_secret_response.json())
+
+    assert unknown_response.json()["error"]["code"] == ("API_KEY_INVALID")

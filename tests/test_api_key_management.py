@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ApiKey
+from app.routers import api_keys as api_keys_router
 
 
 def auth_headers(
@@ -37,6 +38,7 @@ def test_create_api_key_for_authenticated_user(
     )
 
     assert response.status_code == status.HTTP_201_CREATED
+    assert response.headers["cache-control"] == "no-store"
 
     data = response.json()
 
@@ -272,3 +274,62 @@ def test_api_key_can_revoke_itself(
     assert next_response.status_code == status.HTTP_401_UNAUTHORIZED
 
     assert next_response.json()["error"]["code"] == "API_KEY_REVOKED"
+
+
+def test_create_api_key_returns_409_when_limit_reached(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    monkeypatch,
+) -> None:
+    user = user_factory()
+
+    authentication_key = api_key_factory(
+        user_id=user["id"],
+        scopes=("api-keys:write",),
+    )
+
+    monkeypatch.setattr(
+        api_keys_router.settings,
+        "api_key_max_active_per_user",
+        1,
+    )
+
+    response = client.post(
+        "/api/v1/api-keys",
+        headers=auth_headers(authentication_key.raw_key),
+        json={
+            "name": "Another key",
+        },
+    )
+
+    assert response.status_code == (status.HTTP_409_CONFLICT)
+
+    assert response.json()["error"]["code"] == ("API_KEY_LIMIT_REACHED")
+
+    assert response.json()["error"]["details"] == [
+        {
+            "limit": 1,
+        }
+    ]
+
+
+def test_api_key_openapi_schemas_do_not_expose_digest(
+    client: TestClient,
+) -> None:
+    response = client.get("/openapi.json")
+
+    assert response.status_code == (status.HTTP_200_OK)
+
+    schemas = response.json()["components"]["schemas"]
+
+    api_key_response_fields = schemas["APIKeyResponse"]["properties"]
+
+    created_response_fields = schemas["APIKeyCreatedResponse"]["properties"]
+
+    assert "key_digest" not in api_key_response_fields
+    assert "api_key" not in api_key_response_fields
+    assert "user_id" not in api_key_response_fields
+
+    assert "api_key" in created_response_fields
+    assert "key_digest" not in created_response_fields

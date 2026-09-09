@@ -662,9 +662,11 @@ La aplicación requiere:
 
 ```env
 API_KEY_PEPPER=<secret>
+API_KEY_MAX_ACTIVE_PER_USER=10
 ```
 
-El pepper debe generarse mediante una fuente criptográficamente segura y nunca debe versionarse.
+> [!WARNING]
+> `API_KEY_PEPPER` debe tratarse como un secreto y generarse mediante una fuente criptográficamente segura. Nunca debe versionarse. Cambiarlo invalida las credenciales existentes, porque los HMAC almacenados dejan de coincidir con las credenciales presentadas.
 
 La API Key completa tampoco se almacena en PostgreSQL. La base de datos conserva únicamente su identificador público y un digest HMAC utilizado para verificarla.
 
@@ -748,6 +750,22 @@ Una API Key autenticada con los scopes requeridos puede crear, listar y revocar 
 - Los listados nunca incluyen la credencial completa ni su digest.
 - El propietario se obtiene de la API Key autenticada; el cliente no puede enviar `user_id` para administrar credenciales de terceros.
 - La revocación conserva la fila en PostgreSQL mediante `revoked_at` para mantener información de auditoría.
+
+### Hardening de API Keys
+
+La implementación aplica medidas adicionales de seguridad y consistencia:
+
+- Existe un límite configurable de API Keys activas por usuario.
+- Las credenciales revocadas o expiradas no cuentan para ese límite.
+- La creación concurrente se serializa por propietario mediante bloqueo de fila en PostgreSQL.
+- Las respuestas que muestran una API Key completa utilizan `Cache-Control: no-store`.
+- La raw API Key solamente se muestra durante la creación.
+- Los listados nunca contienen la raw key ni su digest.
+- Los errores para `key_id` inexistente y secret incorrecto utilizan el mismo contrato público.
+- Los scopes siguen el principio de mínimo privilegio.
+- Una credencial no puede delegar permisos que ella misma no posee.
+
+El valor `API_KEY_PEPPER` debe tratarse como un secreto. Cambiarlo invalida las credenciales existentes.
 
 ---
 
@@ -1410,6 +1428,11 @@ Nunca debe incluirse `.env`.
 - [x] Autorización granular por scope.
 - [x] `403 INSUFFICIENT_SCOPE`.
 - [x] Prevención de escalamiento de privilegios al delegar scopes.
+- [x] Límite de API Keys activas por propietario.
+- [x] Protección ante creación concurrente de API Keys.
+- [x] Respuestas sensibles con `Cache-Control: no-store`.
+- [x] Regression tests contra exposición de secretos.
+- [x] Hardening completo del ciclo de vida de API Keys.
 
 ### Próximos pasos
 
@@ -1483,4 +1506,4 @@ Por definir.
 
 ## Nota
 
-Este repositorio forma parte de un proyecto de aprendizaje y evoluciona progresivamente. Algunas decisiones arquitectónicas pueden cambiar a medida que se incorpor
+Este repositorio forma parte de un proyecto de aprendizaje y evoluciona progresivamente.

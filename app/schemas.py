@@ -237,4 +237,6 @@ class APIKeyResponse(BaseModel):
 
 
 class APIKeyCreatedResponse(APIKeyResponse):
-    api_key: str
+    api_key: str = Field(
+        repr=False,
+    )

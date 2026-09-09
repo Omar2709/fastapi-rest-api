@@ -7,6 +7,7 @@ from app.database import SessionLocal
 from app.security.scopes import APIKeyScope
 from app.services.api_keys import (
     APIKeyGenerationError,
+    APIKeyLimitReachedError,
     APIKeyOwnerNotFoundError,
     InvalidAPIKeyExpirationError,
     InvalidAPIKeyNameError,
@@ -72,12 +73,14 @@ def main() -> int:
                 user_id=args.user_id,
                 name=args.name,
                 pepper=(settings.api_key_pepper.get_secret_value()),
+                max_active_keys=(settings.api_key_max_active_per_user),
                 expires_at=expires_at,
                 scopes=args.scope,
             )
 
         except (
             APIKeyGenerationError,
+            APIKeyLimitReachedError,
             APIKeyOwnerNotFoundError,
             InvalidAPIKeyExpirationError,
             InvalidAPIKeyNameError,

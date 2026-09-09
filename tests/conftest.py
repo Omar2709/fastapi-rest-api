@@ -75,6 +75,11 @@ def db_session() -> Generator[Session, None, None]:
 
 
 @pytest.fixture
+def db_session_factory():
+    return TestingSessionLocal
+
+
+@pytest.fixture
 def client(
     db_session: Session,
 ) -> Generator[TestClient, None, None]:
@@ -156,6 +161,7 @@ def api_key_factory(
             user_id=user_id,
             name=name,
             pepper=settings.api_key_pepper.get_secret_value(),
+            max_active_keys=(settings.api_key_max_active_per_user),
             expires_at=expires_at,
             scopes=scopes,
         )

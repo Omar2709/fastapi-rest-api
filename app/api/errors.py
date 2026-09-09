@@ -32,6 +32,8 @@ class ErrorCode(StrEnum):
 
     INSUFFICIENT_SCOPE = "INSUFFICIENT_SCOPE"
 
+    API_KEY_LIMIT_REACHED = "API_KEY_LIMIT_REACHED"
+
 
 class ValidationErrorDetail(BaseModel):
     field: str

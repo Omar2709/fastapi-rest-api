@@ -1,4 +1,4 @@
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     db_password: SecretStr
 
     api_key_pepper: SecretStr
+    api_key_max_active_per_user: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
