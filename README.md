@@ -52,6 +52,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Autenticación mediante API Key](#autenticación-mediante-api-key)
 - [Gestión de API Keys](#gestión-de-api-keys)
 - [Scopes y autorización](#scopes-y-autorización)
+- [Jobs](#jobs)
 - [Base de datos](#base-de-datos)
 - [Migraciones con Alembic](#migraciones-con-alembic)
 - [Ejecutar la API](#ejecutar-la-api)
@@ -812,6 +813,41 @@ Además, una API Key no puede crear otra credencial con permisos que ella misma 
 
 ---
 
+## Jobs
+
+El dominio principal del proyecto evoluciona hacia procesamiento asíncrono mediante Jobs.
+
+Un Job representa una unidad de trabajo cuyo ciclo de vida se controla mediante una máquina de estados.
+
+```text
+pending
+   |
+   v
+queued
+   |
+   v
+running
+ /     \
+v       v
+succeeded
+failed
+```
+
+Las transiciones permitidas inicialmente son:
+
+```text
+pending -> queued
+queued -> running
+running -> succeeded
+running -> failed
+```
+
+`succeeded` y `failed` son estados terminales en esta primera versión.
+
+Las transiciones se validan en una capa de dominio independiente de FastAPI, PostgreSQL y el sistema de colas.
+
+---
+
 ## Base de datos
 
 La base de datos utilizada durante el desarrollo es, por defecto:
@@ -1433,12 +1469,14 @@ Nunca debe incluirse `.env`.
 - [x] Respuestas sensibles con `Cache-Control: no-store`.
 - [x] Regression tests contra exposición de secretos.
 - [x] Hardening completo del ciclo de vida de API Keys.
+- [x] Dominio inicial de Jobs.
+- [x] Máquina de estados de Jobs.
+- [x] Validación de transiciones de estado.
+- [x] Tests unitarios de reglas de transición.
 
 ### Próximos pasos
 
 - [ ] Integrar Ruff y pytest en GitHub Actions.
-- [ ] Introducir el dominio de procesamiento de Jobs.
-- [ ] Implementar estados y transiciones de Jobs.
 - [ ] Implementar idempotencia en creación de Jobs.
 - [ ] Introducir Transactional Outbox.
 - [ ] Integrar AWS SQS.
