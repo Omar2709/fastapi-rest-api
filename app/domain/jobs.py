@@ -1,6 +1,10 @@
 from enum import StrEnum
 
 
+class JobType(StrEnum):
+    GENERATE_REPORT = "generate_report"
+
+
 class JobStatus(StrEnum):
     PENDING = "pending"
     QUEUED = "queued"

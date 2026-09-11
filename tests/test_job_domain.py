@@ -3,6 +3,7 @@ import pytest
 from app.domain.jobs import (
     InvalidJobTransitionError,
     JobStatus,
+    JobType,
     can_transition_job,
     ensure_job_transition,
     is_terminal_job_status,
@@ -147,4 +148,10 @@ def test_job_status_values_are_stable() -> None:
         "running",
         "succeeded",
         "failed",
+    }
+
+
+def test_job_type_values_are_stable() -> None:
+    assert {job_type.value for job_type in JobType} == {
+        "generate_report",
     }

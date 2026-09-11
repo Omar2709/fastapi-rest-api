@@ -76,7 +76,7 @@ Este proyecto busca aprender de forma práctica:
 
 - Cómo funciona una API REST.
 - Métodos HTTP: `GET`, `POST`, `PATCH` y `DELETE`.
-- Códigos de estado HTTP como `200`, `201`, `204`, `404`, `405`, `409` y `422`.
+- Códigos de estado HTTP como `200`, `201`, `202`, `204`, `404`, `405`, `409` y `422`.
 - Path parameters, query parameters y request bodies.
 - Validación y serialización de datos con Pydantic.
 - Separación entre modelos de entrada, salida y persistencia.
@@ -411,6 +411,12 @@ Las actualizaciones mediante `PATCH` modifican únicamente los campos enviados p
 | `GET` | `/api/v1/api-keys` | Listar las API Keys del usuario autenticado |
 | `POST` | `/api/v1/api-keys/{key_id}/revoke` | Revocar una API Key del usuario autenticado |
 
+### Jobs
+
+| Método | Endpoint | Descripción |
+| --- | --- | --- |
+| `POST` | `/api/v1/jobs` | Crear un Job para procesamiento asíncrono |
+
 ---
 
 ## Versionado de la API
@@ -451,6 +457,8 @@ La versión definida en `FastAPI(version="0.1.0")` representa la versión del so
     Operación realizada correctamente.
 201 Created
     Se creó un nuevo recurso.
+202 Accepted
+    La solicitud fue aceptada para procesamiento asíncrono, pero el procesamiento todavía no ha finalizado.
 204 No Content
     El recurso fue eliminado correctamente.
 401 Unauthorized
@@ -643,7 +651,7 @@ uv tree
 ### Ejecutar comandos del proyecto
 
 ```bash
-uv run <comando>
+uv run \<comando>
 ```
 
 Ejemplo:
@@ -687,7 +695,7 @@ No existe un endpoint público sin autenticación para crear credenciales.
 La aplicación requiere:
 
 ```env
-API_KEY_PEPPER=<secret>
+API_KEY_PEPPER=\<secret>
 API_KEY_MAX_ACTIVE_PER_USER=10
 ```
 
@@ -724,22 +732,22 @@ La credencial completa se muestra únicamente durante el provisionamiento y debe
 Los endpoints protegidos utilizan una API Key enviada mediante el header:
 
 ```http
-X-API-Key: <api-key>
+X-API-Key: \<api-key>
 ```
 
 Las API Keys se validan mediante:
 
-1. extracción del identificador público `key_id`;
+1\. extracción del identificador público `key_id`;
 
-2. búsqueda de la credencial en PostgreSQL;
+2\. búsqueda de la credencial en PostgreSQL;
 
-3. verificación criptográfica del digest HMAC;
+3\. verificación criptográfica del digest HMAC;
 
-4. comprobación de revocación;
+4\. comprobación de revocación;
 
-5. comprobación de expiración;
+5\. comprobación de expiración;
 
-6. comprobación del estado del propietario.
+6\. comprobación del estado del propietario.
 
 Las credenciales inválidas devuelven `401 Unauthorized`.
 
@@ -809,11 +817,17 @@ Actualmente existen:
 ```text
 api-keys:read
 api-keys:write
+jobs:read
+jobs:write
 ```
 
 `api-keys:read` permite listar las credenciales del propietario.
 
 `api-keys:write` permite crear y revocar credenciales.
+
+`jobs:read` está preparado para autorizar operaciones de lectura sobre Jobs.
+
+`jobs:write` permite crear Jobs para el usuario autenticado.
 
 Una API Key autenticada que no posee el scope requerido recibe:
 
@@ -875,6 +889,50 @@ running -> failed
 `succeeded` y `failed` son estados terminales en esta primera versión.
 
 Las transiciones se validan en una capa de dominio independiente de FastAPI, PostgreSQL y el sistema de colas.
+
+### Crear un Job
+
+```http
+POST /api/v1/jobs
+X-API-Key: <api-key>
+```
+
+Requiere:
+
+```text
+jobs:write
+```
+
+Ejemplo:
+
+```json
+{
+  "job_type": "generate_report",
+  "payload": {
+    "report_id": 42,
+    "format": "pdf"
+  }
+}
+```
+
+Respuesta:
+
+```http
+202 Accepted
+```
+
+```json
+{
+  "id": "4a973290-14d6-4daf-b564-986203494ceb",
+  "job_type": "generate_report",
+  "status": "pending",
+  "created_at": "..."
+}
+```
+
+`202 Accepted` indica que el Job fue aceptado para procesamiento, no que dicho procesamiento haya terminado.
+
+El propietario del Job se obtiene de la API Key autenticada. Campos como `user_id`, `status`, `attempts`, `result` y los timestamps del ciclo de vida son administrados exclusivamente por el servidor.
 
 ---
 
@@ -960,6 +1018,29 @@ Nueva foreign key          -> requiere migración
 Cambio del esquema SQL     -> requiere migración
 ```
 
+### Cambios de Jobs y scopes sin migración
+
+El submit autenticado de Jobs y la ampliación de `APIKeyScope` no modifican el esquema de PostgreSQL.
+
+En este bloque no se modifican:
+
+```text
+jobs schema
+columnas
+constraints
+índices
+foreign keys
+```
+
+Ampliar `APIKeyScope` tampoco requiere una migración, porque los scopes de las API Keys se persisten como strings.
+
+Por tanto, para estos cambios:
+
+```text
+alembic revision   ❌
+alembic upgrade    ❌
+```
+
 ---
 
 ## Ejecutar la API
@@ -994,7 +1075,6 @@ Swagger permite probar directamente los endpoints desde el navegador.
 ```http
 POST /api/v1/users
 Content-Type: application/json
-
 {
   "name": "Ana",
   "email": "ana@example.com"
@@ -1018,7 +1098,6 @@ Respuesta aproximada:
 ```http
 PATCH /api/v1/users/1
 Content-Type: application/json
-
 {
   "is_active": false
 }
@@ -1031,7 +1110,6 @@ Solo los campos enviados son modificados.
 ```http
 POST /api/v1/users/1/tasks
 Content-Type: application/json
-
 {
   "title": "Aprender relaciones",
   "description": "Estudiar ForeignKey y relationship"
@@ -1043,7 +1121,6 @@ Content-Type: application/json
 ```http
 PATCH /api/v1/tasks/1
 Content-Type: application/json
-
 {
   "is_completed": true
 }
@@ -1082,6 +1159,8 @@ UserResponse
 TaskCreate
 TaskUpdate
 TaskResponse
+JobSubmit
+JobAcceptedResponse
 ```
 
 Esta separación permite controlar qué campos puede enviar un cliente y qué campos puede devolver la aplicación.
@@ -1374,7 +1453,7 @@ git diff
 Después:
 
 ```bash
-git add <archivos>
+git add \<archivos>
 git commit -m "type(scope): short description"
 git push
 ```
@@ -1514,6 +1593,13 @@ Nunca debe incluirse `.env`.
 - [x] Métrica de intentos de procesamiento.
 - [x] Timestamps del ciclo de vida de Jobs.
 - [x] Integridad `User 1:N Job`.
+- [x] Submit autenticado de Jobs.
+- [x] Scope `jobs:write`.
+- [x] Scope `jobs:read` preparado.
+- [x] `202 Accepted` para procesamiento asíncrono.
+- [x] Ownership derivado de API Key.
+- [x] Validación de tipos de Job.
+- [x] Protección de campos administrados por servidor.
 
 ### Próximos pasos
 

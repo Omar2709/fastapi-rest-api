@@ -1,4 +1,6 @@
 from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -9,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.domain.jobs import JobStatus, JobType
 from app.security.scopes import APIKeyScope
 
 
@@ -240,3 +243,26 @@ class APIKeyCreatedResponse(APIKeyResponse):
     api_key: str = Field(
         repr=False,
     )
+
+
+class JobSubmit(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+    job_type: JobType
+
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+    )
+
+
+class JobAcceptedResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    id: UUID
+    job_type: JobType
+    status: JobStatus
+    created_at: datetime
