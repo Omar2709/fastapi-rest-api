@@ -1,5 +1,6 @@
 from collections.abc import Callable, Generator
 from datetime import datetime
+from typing import Any
 
 import pytest
 from fastapi import status
@@ -10,11 +11,14 @@ from sqlalchemy.orm import Session, sessionmaker
 import app.models
 from app.config import settings
 from app.database import Base, get_db
+from app.domain.jobs import JobType
 from app.main import app
+from app.models import Job
 from app.services.api_keys import (
     ProvisionedAPIKey,
     provision_api_key,
 )
+from app.services.jobs import submit_job
 
 TEST_DB_NAME = f"{settings.db_name}_test"
 
@@ -167,3 +171,23 @@ def api_key_factory(
         )
 
     return create_api_key
+
+
+@pytest.fixture
+def job_factory(
+    db_session: Session,
+) -> Callable[..., Job]:
+    def create_job(
+        *,
+        user_id: int,
+        job_type: JobType = JobType.GENERATE_REPORT,
+        payload: dict[str, Any] | None = None,
+    ) -> Job:
+        return submit_job(
+            db_session,
+            user_id=user_id,
+            job_type=job_type,
+            payload=payload or {},
+        )
+
+    return create_job

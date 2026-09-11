@@ -36,6 +36,8 @@ class ErrorCode(StrEnum):
 
     USER_HAS_JOBS = "USER_HAS_JOBS"
 
+    JOB_NOT_FOUND = "JOB_NOT_FOUND"
+
 
 class ValidationErrorDetail(BaseModel):
     field: str

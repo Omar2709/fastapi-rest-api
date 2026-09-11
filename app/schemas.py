@@ -266,3 +266,27 @@ class JobAcceptedResponse(BaseModel):
     job_type: JobType
     status: JobStatus
     created_at: datetime
+
+
+class JobSummaryResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    id: UUID
+    job_type: JobType
+    status: JobStatus
+    attempts: int
+
+    created_at: datetime
+    queued_at: datetime | None
+    started_at: datetime | None
+    completed_at: datetime | None
+
+
+class JobDetailResponse(JobSummaryResponse):
+    payload: dict[str, Any]
+    result: dict[str, Any] | None
+
+    error_code: str | None
+    error_message: str | None

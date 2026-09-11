@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import status
@@ -48,6 +48,10 @@ def test_submit_job_returns_202(
     data = response.json()
 
     job_id = UUID(data["id"])
+
+    assert response.headers["location"] == (f"/api/v1/jobs/{job_id}")
+
+    assert response.headers["cache-control"] == ("no-store")
 
     assert data["job_type"] == "generate_report"
     assert data["status"] == JobStatus.PENDING.value
@@ -255,3 +259,351 @@ def test_submit_job_is_documented_in_openapi(
     assert "202" in operation["responses"]
 
     assert {"ApiKeyAuth": []} in operation["security"]
+
+
+def test_get_job_returns_owned_job(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    job_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    job = job_factory(
+        user_id=user["id"],
+        payload={
+            "report_id": 42,
+            "format": "pdf",
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{job.id}",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_200_OK)
+
+    assert response.headers["cache-control"] == ("no-store")
+
+    data = response.json()
+
+    assert data["id"] == str(job.id)
+    assert data["job_type"] == "generate_report"
+    assert data["status"] == "pending"
+    assert data["attempts"] == 0
+
+    assert data["payload"] == {
+        "report_id": 42,
+        "format": "pdf",
+    }
+
+    assert data["result"] is None
+    assert data["error_code"] is None
+    assert data["error_message"] is None
+
+
+def test_get_foreign_job_returns_404(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    job_factory,
+) -> None:
+    first_user = user_factory(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    second_user = user_factory(
+        name="Carlos",
+        email="carlos@example.com",
+    )
+
+    api_key = api_key_factory(
+        user_id=first_user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    foreign_job = job_factory(
+        user_id=second_user["id"],
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{foreign_job.id}",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
+
+    assert response.json() == {
+        "error": {
+            "code": "JOB_NOT_FOUND",
+            "message": "Job no encontrado",
+            "details": None,
+        }
+    }
+
+
+def test_get_unknown_job_returns_404(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{uuid4()}",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_404_NOT_FOUND)
+
+    assert response.json()["error"]["code"] == ("JOB_NOT_FOUND")
+
+
+def test_get_job_rejects_invalid_uuid(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    response = client.get(
+        "/api/v1/jobs/not-a-valid-uuid",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+
+    assert response.json()["error"]["code"] == ("VALIDATION_ERROR")
+
+
+def test_get_job_requires_jobs_read_scope(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    job_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    job = job_factory(
+        user_id=user["id"],
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{job.id}",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_403_FORBIDDEN)
+
+    assert response.json()["error"]["code"] == ("INSUFFICIENT_SCOPE")
+
+    assert response.json()["error"]["details"] == [{"missing_scopes": ["jobs:read"]}]
+
+
+def test_list_jobs_returns_only_owner_jobs(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    job_factory,
+) -> None:
+    first_user = user_factory(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    second_user = user_factory(
+        name="Carlos",
+        email="carlos@example.com",
+    )
+
+    api_key = api_key_factory(
+        user_id=first_user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    first_job = job_factory(
+        user_id=first_user["id"],
+        payload={
+            "job": 1,
+        },
+    )
+
+    second_job = job_factory(
+        user_id=first_user["id"],
+        payload={
+            "job": 2,
+        },
+    )
+
+    foreign_job = job_factory(
+        user_id=second_user["id"],
+    )
+
+    response = client.get(
+        "/api/v1/jobs",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_200_OK)
+
+    assert response.headers["cache-control"] == ("no-store")
+
+    data = response.json()
+
+    returned_ids = {item["id"] for item in data}
+
+    assert returned_ids == {
+        str(first_job.id),
+        str(second_job.id),
+    }
+
+    assert str(foreign_job.id) not in returned_ids
+
+    for item in data:
+        assert "payload" not in item
+        assert "result" not in item
+        assert "error_message" not in item
+
+
+def test_list_jobs_respects_limit(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    job_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    for number in range(3):
+        job_factory(
+            user_id=user["id"],
+            payload={
+                "number": number,
+            },
+        )
+
+    response = client.get(
+        "/api/v1/jobs?limit=2",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_200_OK)
+
+    assert len(response.json()) == 2
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "limit=0",
+        "limit=101",
+        "offset=-1",
+    ],
+)
+def test_list_jobs_rejects_invalid_pagination(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    query: str,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_READ,),
+    )
+
+    response = client.get(
+        f"/api/v1/jobs?{query}",
+        headers=auth_headers(api_key.raw_key),
+    )
+
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+
+
+def test_submit_job_location_points_to_status_resource(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(
+            APIKeyScope.JOBS_READ,
+            APIKeyScope.JOBS_WRITE,
+        ),
+    )
+
+    headers = auth_headers(api_key.raw_key)
+
+    submit_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "report_id": 42,
+            },
+        },
+    )
+
+    assert submit_response.status_code == (status.HTTP_202_ACCEPTED)
+
+    location = submit_response.headers["location"]
+
+    status_response = client.get(
+        location,
+        headers=headers,
+    )
+
+    assert status_response.status_code == (status.HTTP_200_OK)
+
+    assert status_response.json()["id"] == (submit_response.json()["id"])
+
+    assert status_response.json()["status"] == ("pending")
+
+
+def test_job_queries_are_documented_in_openapi(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+
+    jobs_path = schema["paths"]["/api/v1/jobs"]
+
+    job_detail_path = schema["paths"]["/api/v1/jobs/{job_id}"]
+
+    assert "post" in jobs_path
+    assert "get" in jobs_path
+    assert "get" in job_detail_path
+
+    assert {"ApiKeyAuth": []} in jobs_path["get"]["security"]
+
+    assert {"ApiKeyAuth": []} in job_detail_path["get"]["security"]

@@ -416,6 +416,8 @@ Las actualizaciones mediante `PATCH` modifican únicamente los campos enviados p
 | Método | Endpoint | Descripción |
 | --- | --- | --- |
 | `POST` | `/api/v1/jobs` | Crear un Job para procesamiento asíncrono |
+| `GET` | `/api/v1/jobs` | Listar los Jobs del usuario autenticado |
+| `GET` | `/api/v1/jobs/{job_id}` | Consultar un Job del usuario autenticado |
 
 ---
 
@@ -508,6 +510,7 @@ Actualmente se utilizan códigos como:
 ```text
 USER_NOT_FOUND
 TASK_NOT_FOUND
+JOB_NOT_FOUND
 DUPLICATE_EMAIL
 USER_HAS_TASKS
 VALIDATION_ERROR
@@ -651,7 +654,7 @@ uv tree
 ### Ejecutar comandos del proyecto
 
 ```bash
-uv run \<comando>
+uv run <comando>
 ```
 
 Ejemplo:
@@ -695,7 +698,7 @@ No existe un endpoint público sin autenticación para crear credenciales.
 La aplicación requiere:
 
 ```env
-API_KEY_PEPPER=\<secret>
+API_KEY_PEPPER=<secret>
 API_KEY_MAX_ACTIVE_PER_USER=10
 ```
 
@@ -732,22 +735,22 @@ La credencial completa se muestra únicamente durante el provisionamiento y debe
 Los endpoints protegidos utilizan una API Key enviada mediante el header:
 
 ```http
-X-API-Key: \<api-key>
+X-API-Key: <api-key>
 ```
 
 Las API Keys se validan mediante:
 
-1\. extracción del identificador público `key_id`;
+1. extracción del identificador público `key_id`;
 
-2\. búsqueda de la credencial en PostgreSQL;
+2. búsqueda de la credencial en PostgreSQL;
 
-3\. verificación criptográfica del digest HMAC;
+3. verificación criptográfica del digest HMAC;
 
-4\. comprobación de revocación;
+4. comprobación de revocación;
 
-5\. comprobación de expiración;
+5. comprobación de expiración;
 
-6\. comprobación del estado del propietario.
+6. comprobación del estado del propietario.
 
 Las credenciales inválidas devuelven `401 Unauthorized`.
 
@@ -825,7 +828,7 @@ jobs:write
 
 `api-keys:write` permite crear y revocar credenciales.
 
-`jobs:read` está preparado para autorizar operaciones de lectura sobre Jobs.
+`jobs:read` permite listar y consultar los Jobs del usuario autenticado.
 
 `jobs:write` permite crear Jobs para el usuario autenticado.
 
@@ -919,6 +922,7 @@ Respuesta:
 
 ```http
 202 Accepted
+Location: /api/v1/jobs/{job_id}
 ```
 
 ```json
@@ -930,9 +934,57 @@ Respuesta:
 }
 ```
 
-`202 Accepted` indica que el Job fue aceptado para procesamiento, no que dicho procesamiento haya terminado.
+`202 Accepted` indica que el Job fue aceptado para procesamiento, no que dicho procesamiento haya terminado. El header `Location` apunta al recurso que permite consultar su estado.
 
 El propietario del Job se obtiene de la API Key autenticada. Campos como `user_id`, `status`, `attempts`, `result` y los timestamps del ciclo de vida son administrados exclusivamente por el servidor.
+
+### Consultar Jobs
+
+Los Jobs pueden consultarse mediante una API Key con el scope:
+
+```text
+jobs:read
+```
+
+Endpoints:
+
+```http
+GET /api/v1/jobs
+GET /api/v1/jobs/{job_id}
+```
+
+El listado admite paginación mediante los parámetros `limit` y `offset`:
+
+```text
+limit=20
+offset=0
+```
+
+`limit` debe estar entre `1` y `100`.
+
+Los Jobs están aislados por propietario: cada API Key solo puede consultar los Jobs de su propio usuario. Un Job inexistente y un Job perteneciente a otro usuario producen la misma respuesta para evitar revelar la existencia de recursos ajenos:
+
+```http
+404 Not Found
+```
+
+```json
+{
+  "error": {
+    "code": "JOB_NOT_FOUND",
+    "message": "Job no encontrado",
+    "details": null
+  }
+}
+```
+
+Al enviar un Job, `POST /api/v1/jobs` devuelve `202 Accepted` y un header `Location` que apunta al recurso que permite consultar su estado:
+
+```http
+Location: /api/v1/jobs/{job_id}
+```
+
+Las respuestas de seguimiento utilizan `Cache-Control: no-store` porque el estado del Job puede cambiar durante su procesamiento.
 
 ---
 
@@ -1409,6 +1461,8 @@ El proyecto aplica actualmente las siguientes prácticas:
 - Seguimiento limitado de uso mediante `last_used_at` para reducir escrituras innecesarias.
 - Scopes persistentes para API Keys y autorización granular por operación.
 - Prevención de escalamiento de privilegios al delegar scopes.
+- Aislamiento de Jobs por propietario y respuesta uniforme `404 JOB_NOT_FOUND` para recursos inexistentes o ajenos.
+- Respuestas de seguimiento de Jobs con `Cache-Control: no-store`.
 
 Todavía faltan mecanismos importantes como rate limiting, observabilidad y automatización mediante CI.
 
@@ -1453,7 +1507,7 @@ git diff
 Después:
 
 ```bash
-git add \<archivos>
+git add <archivos>
 git commit -m "type(scope): short description"
 git push
 ```
@@ -1595,11 +1649,17 @@ Nunca debe incluirse `.env`.
 - [x] Integridad `User 1:N Job`.
 - [x] Submit autenticado de Jobs.
 - [x] Scope `jobs:write`.
-- [x] Scope `jobs:read` preparado.
+- [x] Scope `jobs:read`.
 - [x] `202 Accepted` para procesamiento asíncrono.
 - [x] Ownership derivado de API Key.
 - [x] Validación de tipos de Job.
 - [x] Protección de campos administrados por servidor.
+- [x] GET individual de Jobs.
+- [x] Listado paginado de Jobs.
+- [x] Aislamiento de Jobs por propietario.
+- [x] `404` uniforme para Jobs inexistentes o ajenos.
+- [x] Status resource para Jobs asíncronos.
+- [x] Header `Location` en `202 Accepted`.
 
 ### Próximos pasos
 
