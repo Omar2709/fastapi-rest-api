@@ -53,6 +53,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Gestión de API Keys](#gestión-de-api-keys)
 - [Scopes y autorización](#scopes-y-autorización)
 - [Jobs](#procesamiento-de-jobs)
+- [Transactional Outbox](#transactional-outbox)
 - [Base de datos](#base-de-datos)
 - [Migraciones con Alembic](#migraciones-con-alembic)
 - [Ejecutar la API](#ejecutar-la-api)
@@ -988,6 +989,39 @@ Las respuestas de seguimiento utilizan `Cache-Control: no-store` porque el estad
 
 ---
 
+## Transactional Outbox
+
+El submit de un Job utiliza el patrón Transactional Outbox para evitar inconsistencias entre PostgreSQL y el futuro sistema de mensajería.
+
+`Job` y `OutboxEvent` se persisten dentro de una única transacción:
+
+```text
+BEGIN
+
+INSERT Job
+INSERT OutboxEvent(job.submitted)
+
+COMMIT
+```
+
+Si cualquiera de las escrituras falla, toda la transacción se revierte. De esta forma, no puede persistirse un Job sin su evento de salida correspondiente ni un evento huérfano sin el Job asociado.
+
+Los eventos pendientes se identifican mediante:
+
+```text
+published_at IS NULL
+```
+
+La consulta de eventos pendientes se apoya en un índice parcial para evitar recorrer eventos que ya fueron publicados.
+
+Un evento `job.submitted` contiene únicamente información mínima sobre el Job. El payload completo del procesamiento permanece en la tabla `jobs`.
+
+El contrato de eventos parte de un versionado inicial para permitir su evolución de forma explícita.
+
+Crear el `OutboxEvent` no significa que el Job ya se encuentre en una cola. Mientras no exista confirmación de publicación, el estado del Job continúa siendo `pending`.
+
+---
+
 ## Base de datos
 
 La base de datos utilizada durante el desarrollo es, por defecto:
@@ -1660,12 +1694,17 @@ Nunca debe incluirse `.env`.
 - [x] `404` uniforme para Jobs inexistentes o ajenos.
 - [x] Status resource para Jobs asíncronos.
 - [x] Header `Location` en `202 Accepted`.
+- [x] Transactional Outbox.
+- [x] Evento `job.submitted`.
+- [x] `Job` + `OutboxEvent` en una transacción PostgreSQL.
+- [x] Rollback atómico ante errores.
+- [x] Índice parcial para eventos pendientes.
+- [x] Versionado inicial de eventos.
 
 ### Próximos pasos
 
 - [ ] Integrar Ruff y pytest en GitHub Actions.
 - [ ] Implementar idempotencia en creación de Jobs.
-- [ ] Introducir Transactional Outbox.
 - [ ] Integrar AWS SQS.
 - [ ] Implementar workers y estrategia de reintentos.
 - [ ] Añadir Dead Letter Queue.

@@ -1,10 +1,13 @@
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.domain.events import EventType
 from app.domain.jobs import JobStatus, JobType
-from app.models import User
+from app.models import Job, OutboxEvent, User
 from app.services import jobs as job_service
 from app.services.jobs import submit_job
 
@@ -60,6 +63,25 @@ def test_submit_job_persists_pending_job(
     assert job.queued_at is None
     assert job.started_at is None
     assert job.completed_at is None
+
+    outbox_event = db_session.scalar(
+        select(OutboxEvent).where(
+            OutboxEvent.aggregate_type == "job",
+            OutboxEvent.aggregate_id == job.id,
+            OutboxEvent.event_type == EventType.JOB_SUBMITTED.value,
+        )
+    )
+
+    assert outbox_event is not None
+    assert outbox_event.event_version == 1
+
+    assert outbox_event.payload == {
+        "job_type": "generate_report",
+    }
+
+    assert outbox_event.attempts == 0
+    assert outbox_event.published_at is None
+    assert outbox_event.last_error is None
 
 
 def test_get_job_returns_owned_job(
@@ -182,3 +204,48 @@ def test_list_jobs_returns_only_owner_jobs(
     }
 
     assert foreign_job.id not in returned_ids
+
+
+def test_submit_job_rolls_back_job_when_outbox_fails(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = create_user(db_session)
+
+    def build_invalid_event(
+        *,
+        job: Job,
+    ) -> OutboxEvent:
+        return OutboxEvent(
+            id=uuid4(),
+            event_type=EventType.JOB_SUBMITTED.value,
+            event_version=0,
+            aggregate_type="job",
+            aggregate_id=job.id,
+            payload={},
+        )
+
+    monkeypatch.setattr(
+        job_service,
+        "_build_job_submitted_event",
+        build_invalid_event,
+    )
+
+    with pytest.raises(IntegrityError):
+        job_service.submit_job(
+            db_session,
+            user_id=user.id,
+            job_type=JobType.GENERATE_REPORT,
+            payload={
+                "report_id": 42,
+            },
+        )
+
+    job_count = db_session.scalar(
+        select(func.count()).select_from(Job).where(Job.user_id == user.id)
+    )
+
+    event_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+
+    assert job_count == 0
+    assert event_count == 0

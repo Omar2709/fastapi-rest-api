@@ -1,12 +1,17 @@
 from collections.abc import Mapping
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.domain.events import EventType
 from app.domain.jobs import JobStatus, JobType
-from app.models import Job
+from app.models import Job, OutboxEvent
+
+JOB_AGGREGATE_TYPE = "job"
+JOB_SUBMITTED_EVENT_VERSION = 1
 
 
 def submit_job(
@@ -17,6 +22,7 @@ def submit_job(
     payload: Mapping[str, Any],
 ) -> Job:
     job = Job(
+        id=uuid4(),
         user_id=user_id,
         job_type=job_type.value,
         status=JobStatus.PENDING,
@@ -24,8 +30,24 @@ def submit_job(
         attempts=0,
     )
 
-    db.add(job)
-    db.commit()
+    outbox_event = _build_job_submitted_event(
+        job=job,
+    )
+
+    db.add_all(
+        [
+            job,
+            outbox_event,
+        ]
+    )
+
+    try:
+        db.commit()
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
     db.refresh(job)
 
     return job
@@ -73,3 +95,19 @@ def list_jobs(
     )
 
     return list(db.scalars(statement).all())
+
+
+def _build_job_submitted_event(
+    *,
+    job: Job,
+) -> OutboxEvent:
+    return OutboxEvent(
+        id=uuid4(),
+        event_type=EventType.JOB_SUBMITTED.value,
+        event_version=JOB_SUBMITTED_EVENT_VERSION,
+        aggregate_type=JOB_AGGREGATE_TYPE,
+        aggregate_id=job.id,
+        payload={
+            "job_type": job.job_type,
+        },
+    )

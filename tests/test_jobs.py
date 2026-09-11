@@ -3,10 +3,12 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.events import EventType
 from app.domain.jobs import JobStatus
-from app.models import Job
+from app.models import Job, OutboxEvent
 from app.security.scopes import APIKeyScope
 
 
@@ -74,6 +76,22 @@ def test_submit_job_returns_202(
         "report_id": 42,
         "format": "pdf",
     }
+
+    outbox_event = db_session.scalar(
+        select(OutboxEvent).where(
+            OutboxEvent.aggregate_id == job_id,
+            OutboxEvent.event_type == EventType.JOB_SUBMITTED.value,
+        )
+    )
+
+    assert outbox_event is not None
+    assert outbox_event.aggregate_type == "job"
+
+    assert outbox_event.payload == {
+        "job_type": "generate_report",
+    }
+
+    assert outbox_event.published_at is None
 
 
 def test_submit_job_requires_api_key(
