@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.domain.events import EventType
@@ -114,23 +115,32 @@ def publish_next_outbox_event(
         db.rollback()
         return False
 
-    job = _get_job_for_submitted_event(
-        db,
-        event=event,
-    )
-
-    message = _build_message_envelope(event)
-
     try:
+        job = _get_job_for_submitted_event(
+            db,
+            event=event,
+        )
+
+        message = _build_message_envelope(event)
+
         broker.publish(message)
 
     except MessageBrokerError as exc:
         event.attempts += 1
         event.last_error = _format_broker_error(exc)
 
-        db.commit()
+        try:
+            db.commit()
+
+        except SQLAlchemyError:
+            db.rollback()
+            raise
 
         raise OutboxPublishError(event.id) from exc
+
+    except Exception:
+        db.rollback()
+        raise
 
     now = datetime.now(UTC)
 
@@ -141,6 +151,11 @@ def publish_next_outbox_event(
     job.status = JobStatus.QUEUED
     job.queued_at = now
 
-    db.commit()
+    try:
+        db.commit()
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
     return True

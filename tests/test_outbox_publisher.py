@@ -1,10 +1,15 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
+from typing import Any
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.adapters.aws.sqs import (
+    SQSMessageBroker,
+)
 from app.domain.events import EventType
 from app.domain.jobs import (
     InvalidJobTransitionError,
@@ -18,6 +23,19 @@ from app.ports.message_broker import (
 )
 from app.services import jobs as job_service
 from app.services import outbox as outbox_service
+
+
+class RecordingSQSClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def send_message(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        self.calls.append(kwargs)
+
+        return {"MessageId": "test-message-id"}
 
 
 class RecordingMessageBroker:
@@ -309,3 +327,44 @@ def test_concurrent_publishers_do_not_publish_same_event(
     assert second_result is False
 
     assert len(broker.messages) == 1
+
+
+def test_outbox_publisher_can_use_sqs_adapter(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    job = job_service.submit_job(
+        db_session,
+        user_id=user.id,
+        job_type=JobType.GENERATE_REPORT,
+        payload={
+            "report_id": 42,
+        },
+    )
+
+    sqs_client = RecordingSQSClient()
+
+    broker = SQSMessageBroker(
+        client=sqs_client,
+        queue_url=("https://example.invalid/jobs"),
+    )
+
+    published = outbox_service.publish_next_outbox_event(
+        db_session,
+        broker=broker,
+    )
+
+    assert published is True
+
+    assert len(sqs_client.calls) == 1
+
+    message = json.loads(sqs_client.calls[0]["MessageBody"])
+
+    assert message["aggregate_id"] == str(job.id)
+
+    assert message["event_type"] == ("job.submitted")
+
+    db_session.refresh(job)
+
+    assert job.status == JobStatus.QUEUED

@@ -10,6 +10,26 @@ class Settings(BaseSettings):
     db_password: SecretStr
 
     api_key_pepper: SecretStr
+
+    aws_region: str | None = None
+    sqs_jobs_queue_url: str | None = None
+
+    aws_connect_timeout_seconds: float = Field(
+        default=2.0,
+        gt=0,
+    )
+
+    aws_read_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+    )
+
+    aws_total_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+    )
+
     api_key_max_active_per_user: int = Field(
         default=10,
         ge=1,

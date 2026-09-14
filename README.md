@@ -55,6 +55,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Jobs](#procesamiento-de-jobs)
 - [Transactional Outbox](#transactional-outbox)
 - [Outbox Publisher](#outbox-publisher)
+- [Amazon SQS](#amazon-sqs)
 - [Base de datos](#base-de-datos)
 - [Migraciones con Alembic](#migraciones-con-alembic)
 - [Ejecutar la API](#ejecutar-la-api)
@@ -121,6 +122,8 @@ Este proyecto busca aprender de forma práctica:
 | FastAPI TestClient | Pruebas HTTP de la aplicación |
 | Ruff | Linting, orden de imports y formateo |
 | uv | Gestión de dependencias, entorno virtual y lockfile |
+| Boto3 | AWS SDK para Python y cliente de Amazon SQS |
+| Amazon SQS | Cola estándar para publicación asíncrona de eventos |
 | Git | Control de versiones |
 | GitHub | Repositorio remoto |
 
@@ -254,7 +257,7 @@ Actualmente existen cuatro recursos relacionados:
 
 ```text
               User
-           /    |    \
+           /    |    \\
           v     v     v
         Task  ApiKey  Job
 ```
@@ -723,9 +726,9 @@ uv run python -m scripts.provision_api_key `
 También puede establecerse una expiración:
 
 ```bash
-uv run python -m scripts.provision_api_key \
-    --user-id 1 \
-    --name "Temporary integration" \
+uv run python -m scripts.provision_api_key \\
+    --user-id 1 \\
+    --name "Temporary integration" \\
     --expires-in-days 90
 ```
 
@@ -872,7 +875,7 @@ queued
    |
    v
 running
- /     \
+ /     \\
 v       v
 succeeded
 failed
@@ -988,7 +991,7 @@ Las respuestas de seguimiento utilizan `Cache-Control: no-store` porque el estad
 
 ## Transactional Outbox
 
-El submit de un Job utiliza el patrón Transactional Outbox para evitar inconsistencias entre PostgreSQL y el futuro sistema de mensajería.
+El submit de un Job utiliza el patrón Transactional Outbox para evitar inconsistencias entre PostgreSQL y el sistema de mensajería.
 
 `Job` y `OutboxEvent` se persisten dentro de una única transacción:
 
@@ -1031,7 +1034,7 @@ MessageBroker
        |
        +-- Fake adapter (tests)
        |
-       +-- AWS SQS adapter (futuro)
+       +-- SQSMessageBroker -> Amazon SQS Standard Queue
 ```
 
 El publisher selecciona eventos pendientes utilizando PostgreSQL:
@@ -1064,6 +1067,58 @@ La arquitectura utiliza semántica **at-least-once**. Existe una pequeña ventan
 Por esta razón cada mensaje incluye un `event_id` estable y los consumidores deberán ser idempotentes.
 
 Esto documenta justamente la garantía real de la fase: **at-least-once**, no exactly-once.
+
+---
+
+## Amazon SQS
+
+El proyecto utiliza un adapter de Amazon SQS que implementa el port `MessageBroker`.
+
+```text
+Outbox Publisher
+       |
+       v
+MessageBroker
+       |
+       v
+SQSMessageBroker
+       |
+       v
+Amazon SQS Standard Queue
+```
+
+Los eventos se serializan como JSON versionado e incluyen un `event_id` estable.
+
+El cliente AWS utiliza:
+
+```text
+retry mode: standard
+total attempts: 3
+connect timeout: configurable
+read timeout: configurable
+```
+
+Las credenciales AWS no se almacenan en el código ni forman parte de la configuración propia de la aplicación. Boto3 utiliza la cadena estándar de proveedores de credenciales y, en AWS, deben preferirse IAM Roles con permisos mínimos.
+
+Variables de configuración:
+
+```env
+AWS_REGION=<region>
+SQS_JOBS_QUEUE_URL=<queue-url>
+AWS_CONNECT_TIMEOUT_SECONDS=2
+AWS_READ_TIMEOUT_SECONDS=5
+AWS_TOTAL_MAX_ATTEMPTS=3
+```
+
+Ejecutar el publisher:
+
+```bash
+uv run python -m scripts.publish_outbox --max-events 100
+```
+
+Cuando SQS confirma `job.submitted`, el Outbox se marca como publicado y el Job transiciona de `pending` a `queued`.
+
+Amazon SQS Standard ofrece entrega at-least-once, por lo que los consumidores deben diseñarse para tolerar mensajes duplicados.
 
 ---
 
@@ -1754,12 +1809,19 @@ Nunca debe incluirse `.env`.
 - [x] `FOR UPDATE SKIP LOCKED`.
 - [x] Protección ante publishers concurrentes.
 - [x] Semántica at-least-once documentada.
+- [x] AWS SQS adapter.
+- [x] Serialización JSON de MessageEnvelope.
+- [x] Standard retry mode del AWS SDK.
+- [x] Timeouts configurables.
+- [x] Límite de tamaño SQS.
+- [x] Publisher ejecutable.
+- [x] Tests sin dependencia de AWS.
+- [x] Integración Outbox → SQS.
 
 ### Próximos pasos
 
 - [ ] Integrar Ruff y pytest en GitHub Actions.
 - [ ] Implementar idempotencia en creación de Jobs.
-- [ ] Integrar AWS SQS.
 - [ ] Implementar workers y estrategia de reintentos.
 - [ ] Añadir Dead Letter Queue.
 - [ ] Implementar webhooks firmados con HMAC.
