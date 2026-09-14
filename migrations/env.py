@@ -18,7 +18,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     url = database_url.render_as_string(
-        hide_password=False,
+        hide_password=True,
     )
 
     context.configure(

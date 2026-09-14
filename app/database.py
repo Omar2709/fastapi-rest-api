@@ -17,7 +17,7 @@ database_url = URL.create(
 
 engine = create_engine(
     database_url,
-    echo=True,
+    echo=settings.db_echo,
 )
 
 

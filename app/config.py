@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     db_name: str
     db_user: str
     db_password: SecretStr
+    db_echo: bool = False
 
     api_key_pepper: SecretStr
 

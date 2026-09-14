@@ -3,9 +3,18 @@ from typing import Any
 from fastapi import APIRouter, status
 
 from app.api.errors import ErrorResponse
-from app.routers import api_keys, auth, jobs, tasks, users
+from app.routers import (
+    api_keys,
+    auth,
+    jobs,
+    tasks,
+    users,
+)
 
-VALIDATION_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+VALIDATION_ERROR_RESPONSES: dict[
+    int | str,
+    dict[str, Any],
+] = {
     status.HTTP_422_UNPROCESSABLE_CONTENT: {
         "model": ErrorResponse,
         "description": "Error de validación",
@@ -14,6 +23,7 @@ VALIDATION_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 
 
 api_router = APIRouter()
+
 
 api_router.include_router(
     users.router,
@@ -25,8 +35,17 @@ api_router.include_router(
     responses=VALIDATION_ERROR_RESPONSES,
 )
 
-api_router.include_router(auth.router)
+api_router.include_router(
+    auth.router,
+    responses=VALIDATION_ERROR_RESPONSES,
+)
 
-api_router.include_router(api_keys.router)
+api_router.include_router(
+    api_keys.router,
+    responses=VALIDATION_ERROR_RESPONSES,
+)
 
-api_router.include_router(jobs.router)
+api_router.include_router(
+    jobs.router,
+    responses=VALIDATION_ERROR_RESPONSES,
+)

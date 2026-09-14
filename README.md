@@ -131,111 +131,171 @@ Este proyecto busca aprender de forma práctica:
 
 ## Arquitectura
 
-El proyecto mantiene una separación sencilla por responsabilidades:
+La arquitectura actual separa el contrato HTTP, la autenticación, los casos de uso, el dominio, la persistencia y las integraciones externas mediante ports y adapters:
 
 ```text
-Cliente
-   |
-   | HTTP
-   v
-FastAPI / Routers
-   |
-   v
-Pydantic
-   |
-   v
-Services
-   |
-   v
-SQLAlchemy ORM
-   |
-   v
-Psycopg
-   |
-   v
-PostgreSQL
+                         Client
+                           |
+                           | HTTP
+                           v
+                    FastAPI / Routers
+                           |
+                  Authentication / Scopes
+                           |
+                           v
+                        Services
+                      /          \
+                     v            v
+                  Domain      SQLAlchemy ORM
+                                  |
+                                  v
+                              PostgreSQL
+                           /               \
+                          v                 v
+                       Jobs          Outbox Events
+                                         |
+                                         v
+                                  Outbox Publisher
+                                         |
+                                         v
+                                   MessageBroker
+                                        Port
+                                         |
+                                         v
+                                  SQSMessageBroker
+                                         |
+                                         v
+                                    Amazon SQS
 ```
 
-### Responsabilidad de cada capa
+### Responsabilidades
 
-```text
-routers/
-    Manejo HTTP:
-    rutas, parámetros, códigos de estado y traducción de errores a APIError.
-services/
-    Lógica de aplicación y operaciones con SQLAlchemy.
-schemas.py
-    Modelos Pydantic para datos de entrada y salida.
-models.py
-    Modelos ORM que representan las tablas de PostgreSQL.
-database.py
-    Engine, Session y conexión con la base de datos.
-config.py
-    Configuración cargada desde variables de entorno.
-api/errors.py
-    Contrato transversal de errores, códigos estables y handlers globales.
-migrations/
-    Historial de cambios del esquema administrado por Alembic.
-tests/
-    Pruebas automatizadas y fixtures de testing.
-```
+`api/`  
+Configuración transversal de la API: errores, dependencias y router versionado.
+
+`routers/`  
+Contrato HTTP: rutas, parámetros, códigos de estado y traducción de errores de aplicación.
+
+`schemas.py`  
+Modelos Pydantic de entrada y salida.
+
+`services/`  
+Casos de uso, transacciones y coordinación de persistencia.
+
+`domain/`  
+Reglas independientes de infraestructura: estados, transiciones y tipos de eventos.
+
+`security/`  
+Generación/verificación de API Keys y scopes.
+
+`ports/`  
+Interfaces que la aplicación necesita de sistemas externos, como `MessageBroker`.
+
+`adapters/`  
+Implementaciones concretas de los ports. Actualmente incluye Amazon SQS mediante Boto3.
+
+`models.py`  
+Modelos SQLAlchemy y restricciones PostgreSQL.
+
+`database.py`  
+Engine, Session y configuración de persistencia.
+
+`scripts/`  
+Operaciones administrativas y procesos ejecutables, como provisionamiento y Outbox Publisher.
+
+`migrations/`  
+Historial de evolución del schema mediante Alembic.
+
+`tests/`  
+Tests unitarios, HTTP, PostgreSQL, concurrencia, Outbox y adapters externos mediante fakes.
 
 ---
 
 ## Estructura del proyecto
 
-La estructura actual es similar a:
+La estructura principal del proyecto, verificada contra el árbol real, se resume así:
 
 ```text
 fastapi-rest-api/
 |
 ├── app/
-│   ├── __init__.py
+│   ├── adapters/
+│   │   └── aws/
+│   │       └── sqs.py
+│   │
 │   ├── api/
-│   │   ├── __init__.py
+│   │   ├── dependencies/
+│   │   │   └── auth.py
 │   │   ├── errors.py
 │   │   └── v1/
-│   │       ├── __init__.py
 │   │       └── router.py
 │   │
-│   ├── main.py
-│   ├── config.py
-│   ├── database.py
-│   ├── models.py
-│   ├── schemas.py
+│   ├── domain/
+│   │   ├── events.py
+│   │   └── jobs.py
+│   │
+│   ├── ports/
+│   │   └── message_broker.py
 │   │
 │   ├── routers/
-│   │   ├── __init__.py
-│   │   ├── users.py
-│   │   └── tasks.py
+│   │   ├── api_keys.py
+│   │   ├── auth.py
+│   │   ├── jobs.py
+│   │   ├── tasks.py
+│   │   └── users.py
 │   │
-│   └── services/
-│       ├── __init__.py
-│       ├── users.py
-│       └── tasks.py
+│   ├── security/
+│   │   ├── api_keys.py
+│   │   └── scopes.py
+│   │
+│   ├── services/
+│   │   ├── api_keys.py
+│   │   ├── jobs.py
+│   │   ├── outbox.py
+│   │   ├── tasks.py
+│   │   └── users.py
+│   │
+│   ├── config.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models.py
+│   └── schemas.py
 │
 ├── migrations/
-│   ├── versions/
-│   ├── env.py
-│   └── script.py.mako
 │
-├── sql/
-│   └── 01_users.sql
+├── scripts/
+│   ├── provision_api_key.py
+│   └── publish_outbox.py
 │
 ├── tests/
 │   ├── conftest.py
+│   ├── test_api_key_auth.py
+│   ├── test_api_key_management.py
+│   ├── test_api_key_model.py
+│   ├── test_api_key_scopes.py
+│   ├── test_api_key_security.py
+│   ├── test_api_key_service.py
+│   ├── test_event_domain.py
+│   ├── test_jobs.py
+│   ├── test_job_domain.py
+│   ├── test_job_model.py
+│   ├── test_job_service.py
 │   ├── test_main.py
+│   ├── test_openapi.py
+│   ├── test_outbox_model.py
+│   ├── test_outbox_publisher.py
+│   ├── test_sqs_adapter.py
 │   ├── test_tasks.py
 │   └── test_users.py
 │
-├── .env
 ├── .env.example
-├── .gitignore
 ├── alembic.ini
 ├── pyproject.toml
 ├── uv.lock
 └── README.md
 ```
+
+Los archivos `__init__.py`, los directorios `__pycache__/` y los bytecodes `*.pyc` se omiten deliberadamente del árbol documental porque no aportan información arquitectónica.
 
 > `.env` contiene configuración local sensible y no debe subirse al repositorio.
 
@@ -257,7 +317,7 @@ Actualmente existen cuatro recursos relacionados:
 
 ```text
               User
-           /    |    \\
+           /    |    \
           v     v     v
         Task  ApiKey  Job
 ```
@@ -684,6 +744,15 @@ DB_PORT=5432
 DB_NAME=fastapi_learning
 DB_USER=your_database_user
 DB_PASSWORD=your_database_password
+DB_ECHO=false
+```
+
+`DB_ECHO` controla el logging SQL de SQLAlchemy.
+
+El valor predeterminado es `false` para evitar generar logs SQL detallados innecesariamente. Puede activarse temporalmente durante desarrollo:
+
+```env
+DB_ECHO=true
 ```
 
 Nunca subas contraseñas reales, tokens o secretos al repositorio.
@@ -726,9 +795,9 @@ uv run python -m scripts.provision_api_key `
 También puede establecerse una expiración:
 
 ```bash
-uv run python -m scripts.provision_api_key \\
-    --user-id 1 \\
-    --name "Temporary integration" \\
+uv run python -m scripts.provision_api_key \
+    --user-id 1 \
+    --name "Temporary integration" \
     --expires-in-days 90
 ```
 
@@ -875,7 +944,7 @@ queued
    |
    v
 running
- /     \\
+ /     \
 v       v
 succeeded
 failed
@@ -1375,17 +1444,21 @@ PostgreSQL
 
 ## Testing
 
-El proyecto utiliza **pytest** y **FastAPI TestClient** para validar el comportamiento de la API.
+La suite combina distintos niveles de testing:
 
-La suite contiene pruebas para los endpoints generales, usuarios y tareas:
+- Tests unitarios para reglas de dominio y seguridad.
+- Tests HTTP mediante FastAPI `TestClient`.
+- Tests de integración contra PostgreSQL.
+- Tests de constraints e integridad referencial.
+- Tests de autenticación y autorización mediante API Keys.
+- Tests de Jobs y su máquina de estados.
+- Tests de Transactional Outbox.
+- Tests de concurrencia utilizando sesiones PostgreSQL independientes.
+- Tests del adapter SQS mediante fakes, sin depender de una cuenta AWS real.
 
-```text
-tests/
-├── conftest.py
-├── test_main.py
-├── test_users.py
-└── test_tasks.py
-```
+La suite normal no requiere acceso a servicios AWS.
+
+La estructura actual contiene **18 módulos `test_*.py`**, además de `conftest.py`, con cobertura explícita para API Keys, dominio de eventos y Jobs, modelos y servicios de Jobs, OpenAPI, Outbox Publisher y el adapter SQS.
 
 ### Base de datos de testing
 
@@ -1485,15 +1558,16 @@ htmlcov/
 
 Antes de realizar un commit importante:
 
-```bash
+```powershell
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest --cov=app --cov-report=term-missing
+uv run alembic current
+uv run alembic heads
+git diff --check
 ```
 
-El último comando ejecuta la suite de tests, mide cobertura de líneas y ramas y comprueba que se mantiene el umbral mínimo configurado.
-
-Actualmente el proyecto mantiene una cobertura superior al umbral mínimo establecido. El porcentaje exacto no se fija en el README porque evoluciona con el código.
+Este conjunto valida linting, formato, tests y cobertura, estado de migraciones y errores de whitespace en el diff antes de integrar cambios.
 
 ---
 
@@ -1542,23 +1616,29 @@ uv run ruff format .
 
 Antes de realizar un commit importante se debe comprobar:
 
-```bash
+```powershell
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest --cov=app --cov-report=term-missing
+uv run alembic current
+uv run alembic heads
+git diff --check
 ```
 
 El resultado esperado es conceptualmente:
 
 ```text
-Ruff lint       ✅
-Ruff format     ✅
-Tests           ✅
+Ruff lint          ✅
+Ruff format        ✅
+Tests + coverage   ✅
+Alembic current    ✅
+Alembic heads      ✅
+Git diff check     ✅
 ```
 
 Este conjunto de comandos define el **contrato de calidad local** del proyecto.
 
-Más adelante GitHub Actions ejecutará las mismas comprobaciones en integración continua para reducir diferencias entre el entorno local y CI.
+Más adelante GitHub Actions ejecutará las mismas comprobaciones automatizables en integración continua para reducir diferencias entre el entorno local y CI.
 
 ---
 
