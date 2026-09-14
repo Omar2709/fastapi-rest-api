@@ -54,6 +54,7 @@ El objetivo es estudiar problemas propios de APIs distribuidas y procesamiento a
 - [Scopes y autorización](#scopes-y-autorización)
 - [Jobs](#procesamiento-de-jobs)
 - [Transactional Outbox](#transactional-outbox)
+- [Outbox Publisher](#outbox-publisher)
 - [Base de datos](#base-de-datos)
 - [Migraciones con Alembic](#migraciones-con-alembic)
 - [Ejecutar la API](#ejecutar-la-api)
@@ -704,6 +705,7 @@ API_KEY_MAX_ACTIVE_PER_USER=10
 ```
 
 > [!WARNING]
+
 > `API_KEY_PEPPER` debe tratarse como un secreto y generarse mediante una fuente criptográficamente segura. Nunca debe versionarse. Cambiarlo invalida las credenciales existentes, porque los HMAC almacenados dejan de coincidir con las credenciales presentadas.
 
 La API Key completa tampoco se almacena en PostgreSQL. La base de datos conserva únicamente su identificador público y un digest HMAC utilizado para verificarla.
@@ -742,15 +744,10 @@ X-API-Key: <api-key>
 Las API Keys se validan mediante:
 
 1. extracción del identificador público `key_id`;
-
 2. búsqueda de la credencial en PostgreSQL;
-
 3. verificación criptográfica del digest HMAC;
-
 4. comprobación de revocación;
-
 5. comprobación de expiración;
-
 6. comprobación del estado del propietario.
 
 Las credenciales inválidas devuelven `401 Unauthorized`.
@@ -997,10 +994,8 @@ El submit de un Job utiliza el patrón Transactional Outbox para evitar inconsis
 
 ```text
 BEGIN
-
 INSERT Job
 INSERT OutboxEvent(job.submitted)
-
 COMMIT
 ```
 
@@ -1019,6 +1014,56 @@ Un evento `job.submitted` contiene únicamente información mínima sobre el Job
 El contrato de eventos parte de un versionado inicial para permitir su evolución de forma explícita.
 
 Crear el `OutboxEvent` no significa que el Job ya se encuentre en una cola. Mientras no exista confirmación de publicación, el estado del Job continúa siendo `pending`.
+
+---
+
+## Outbox Publisher
+
+Los eventos persistidos mediante Transactional Outbox son procesados por un publisher independiente del proveedor de mensajería.
+
+La aplicación define un `MessageBroker` como port:
+
+```text
+Outbox Publisher
+       |
+       v
+MessageBroker
+       |
+       +-- Fake adapter (tests)
+       |
+       +-- AWS SQS adapter (futuro)
+```
+
+El publisher selecciona eventos pendientes utilizando PostgreSQL:
+
+```sql
+FOR UPDATE SKIP LOCKED
+```
+
+Esto permite que múltiples publishers trabajen concurrentemente sin seleccionar simultáneamente la misma fila.
+
+Cuando `job.submitted` se publica correctamente:
+
+```text
+OutboxEvent.published_at = timestamp
+Job.status = queued
+Job.queued_at = timestamp
+```
+
+Si el broker falla:
+
+```text
+OutboxEvent.attempts += 1
+OutboxEvent.last_error = ...
+OutboxEvent.published_at = NULL
+Job.status = pending
+```
+
+La arquitectura utiliza semántica **at-least-once**. Existe una pequeña ventana entre la confirmación del broker y el commit de PostgreSQL en la que un evento podría publicarse nuevamente después de un fallo.
+
+Por esta razón cada mensaje incluye un `event_id` estable y los consumidores deberán ser idempotentes.
+
+Esto documenta justamente la garantía real de la fase: **at-least-once**, no exactly-once.
 
 ---
 
@@ -1700,6 +1745,15 @@ Nunca debe incluirse `.env`.
 - [x] Rollback atómico ante errores.
 - [x] Índice parcial para eventos pendientes.
 - [x] Versionado inicial de eventos.
+- [x] Message broker port.
+- [x] Message envelope versionado.
+- [x] Outbox publisher.
+- [x] Transición `pending -> queued` tras publicación.
+- [x] Persistencia de errores de publicación.
+- [x] Retry de eventos no publicados.
+- [x] `FOR UPDATE SKIP LOCKED`.
+- [x] Protección ante publishers concurrentes.
+- [x] Semántica at-least-once documentada.
 
 ### Próximos pasos
 
