@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+
+        env:
+          POSTGRES_DB: fastapi_ci
+          POSTGRES_USER: fastapi_ci
+          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U fastapi_ci -d fastapi_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_NAME: fastapi_ci
+      DB_USER: fastapi_ci
+      DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+      DB_ECHO: "false"
+
+      API_KEY_PEPPER: ${{ secrets.CI_API_KEY_PEPPER }}
+      API_KEY_MAX_ACTIVE_PER_USER: "10"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Create test database
+        run: |
+          uv run python - <<'PY'
+          import os
+
+          import psycopg
+          from psycopg import sql
+
+          test_db_name = f"{os.environ['DB_NAME']}_test"
+
+          with psycopg.connect(
+              host=os.environ["DB_HOST"],
+              port=int(os.environ["DB_PORT"]),
+              dbname=os.environ["DB_NAME"],
+              user=os.environ["DB_USER"],
+              password=os.environ["DB_PASSWORD"],
+              autocommit=True,
+          ) as connection:
+              with connection.cursor() as cursor:
+                  cursor.execute(
+                      "SELECT 1 FROM pg_database WHERE datname = %s",
+                      (test_db_name,),
+                  )
+
+                  if cursor.fetchone() is None:
+                      cursor.execute(
+                          sql.SQL("CREATE DATABASE {}").format(
+                              sql.Identifier(test_db_name)
+                          )
+                      )
+          PY
+
+      - name: Run Ruff lint
+        run: uv run ruff check .
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check .
+
+      - name: Apply database migrations
+        run: uv run alembic upgrade head
+
+      - name: Show Alembic revision
+        run: |
+          uv run alembic current
+          uv run alembic heads
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=app --cov-report=term-missing
