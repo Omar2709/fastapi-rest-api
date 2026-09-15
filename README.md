@@ -2346,7 +2346,6 @@ Por ejemplo:
 
 ```python
 db.get(User, 1)
-
 ```
 
 representa conceptualmente una operación similar a:
@@ -2363,7 +2362,6 @@ Y:
 ```python
 db.delete(user)
 db.commit()
-
 ```
 
 termina produciendo conceptualmente:
@@ -2378,7 +2376,6 @@ De forma similar:
 
 ```python
 task_data.model_dump(exclude_unset=True)
-
 ```
 
 permite distinguir los campos enviados realmente durante una actualización parcial.
