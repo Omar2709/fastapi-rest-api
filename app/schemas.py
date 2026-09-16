@@ -11,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.contracts.jobs import GenerateReportPayload
 from app.domain.jobs import JobStatus, JobType
 from app.security.scopes import APIKeyScope
 
@@ -251,10 +252,7 @@ class JobSubmit(BaseModel):
     )
 
     job_type: JobType
-
-    payload: dict[str, Any] = Field(
-        default_factory=dict,
-    )
+    payload: GenerateReportPayload
 
 
 class JobAcceptedResponse(BaseModel):

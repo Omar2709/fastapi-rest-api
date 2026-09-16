@@ -107,7 +107,7 @@ def submit_job(
         db,
         user_id=current_api_key.user_id,
         job_type=job_data.job_type,
-        payload=job_data.payload,
+        payload=job_data.payload.model_dump(mode="json"),
     )
 
     response.headers["Location"] = f"/api/v1/jobs/{job.id}"

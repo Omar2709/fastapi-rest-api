@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.contracts.jobs import InvalidJobPayloadError
 from app.domain.events import EventType
 from app.domain.jobs import JobStatus, JobType
 from app.models import Job, OutboxEvent, User
@@ -37,7 +38,8 @@ def test_submit_job_persists_pending_job(
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
         payload={
-            "report_id": 42,
+            "title": "Test report",
+            "content": "Test report content",
             "format": "pdf",
         },
     )
@@ -48,7 +50,8 @@ def test_submit_job_persists_pending_job(
     assert job.status == JobStatus.PENDING
 
     assert job.payload == {
-        "report_id": 42,
+        "title": "Test report",
+        "content": "Test report content",
         "format": "pdf",
     }
 
@@ -94,7 +97,9 @@ def test_get_job_returns_owned_job(
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
         payload={
-            "report_id": 42,
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
         },
     )
 
@@ -126,7 +131,11 @@ def test_get_job_rejects_foreign_job(
         db_session,
         user_id=second_user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     with pytest.raises(job_service.JobNotFoundError):
@@ -169,7 +178,9 @@ def test_list_jobs_returns_only_owner_jobs(
         user_id=first_user.id,
         job_type=JobType.GENERATE_REPORT,
         payload={
-            "number": 1,
+            "title": "Report 1",
+            "content": "First report content",
+            "format": "pdf",
         },
     )
 
@@ -178,7 +189,9 @@ def test_list_jobs_returns_only_owner_jobs(
         user_id=first_user.id,
         job_type=JobType.GENERATE_REPORT,
         payload={
-            "number": 2,
+            "title": "Report 2",
+            "content": "Second report content",
+            "format": "pdf",
         },
     )
 
@@ -186,7 +199,11 @@ def test_list_jobs_returns_only_owner_jobs(
         db_session,
         user_id=second_user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     jobs = job_service.list_jobs(
@@ -237,7 +254,9 @@ def test_submit_job_rolls_back_job_when_outbox_fails(
             user_id=user.id,
             job_type=JobType.GENERATE_REPORT,
             payload={
-                "report_id": 42,
+                "title": "Test report",
+                "content": "Test report content",
+                "format": "pdf",
             },
         )
 
@@ -249,3 +268,26 @@ def test_submit_job_rolls_back_job_when_outbox_fails(
 
     assert job_count == 0
     assert event_count == 0
+
+
+def test_submit_job_rejects_invalid_payload_before_persistence(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    with pytest.raises(InvalidJobPayloadError):
+        job_service.submit_job(
+            db_session,
+            user_id=user.id,
+            job_type=JobType.GENERATE_REPORT,
+            payload={},
+        )
+
+    job_count = db_session.scalar(
+        select(func.count()).select_from(Job).where(Job.user_id == user.id)
+    )
+
+    outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+
+    assert job_count == 0
+    assert outbox_count == 0

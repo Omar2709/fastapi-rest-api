@@ -105,7 +105,9 @@ def test_publish_outbox_event_queues_job(
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
         payload={
-            "report_id": 42,
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
         },
     )
 
@@ -157,7 +159,11 @@ def test_broker_failure_keeps_job_pending(
         db_session,
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     broker = RecordingMessageBroker(
@@ -196,7 +202,11 @@ def test_failed_outbox_event_can_be_retried(
         db_session,
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     broker = RecordingMessageBroker(
@@ -241,7 +251,11 @@ def test_published_event_is_not_published_again(
         db_session,
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     broker = RecordingMessageBroker()
@@ -271,7 +285,11 @@ def test_invalid_job_state_is_detected_before_publish(
         db_session,
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     job.status = JobStatus.RUNNING
@@ -298,7 +316,11 @@ def test_concurrent_publishers_do_not_publish_same_event(
         db_session,
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     broker = BlockingMessageBroker()
@@ -339,7 +361,9 @@ def test_outbox_publisher_can_use_sqs_adapter(
         user_id=user.id,
         job_type=JobType.GENERATE_REPORT,
         payload={
-            "report_id": 42,
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
         },
     )
 

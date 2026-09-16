@@ -33,8 +33,9 @@ def test_job_can_be_persisted(
         user_id=user.id,
         job_type="generate_report",
         payload={
+            "title": "Test report",
+            "content": "Test report content",
             "format": "pdf",
-            "report_id": 42,
         },
     )
 
@@ -49,8 +50,9 @@ def test_job_can_be_persisted(
     assert job.status == JobStatus.PENDING
 
     assert job.payload == {
+        "title": "Test report",
+        "content": "Test report content",
         "format": "pdf",
-        "report_id": 42,
     }
 
     assert job.result is None
@@ -73,7 +75,11 @@ def test_job_status_persists_public_enum_value(
     job = Job(
         user_id=user.id,
         job_type="generate_report",
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     db_session.add(job)
@@ -103,7 +109,11 @@ def test_job_type_cannot_be_blank(
     job = Job(
         user_id=user.id,
         job_type="   ",
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     db_session.add(job)
@@ -131,7 +141,11 @@ def test_job_attempts_cannot_be_negative(
     job = Job(
         user_id=user.id,
         job_type="generate_report",
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
         attempts=-1,
     )
 
@@ -158,7 +172,11 @@ def test_job_requires_existing_user(
     job = Job(
         user_id=999999999,
         job_type="generate_report",
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     db_session.add(job)
@@ -235,7 +253,11 @@ def test_deleting_user_with_job_is_restricted(
     job = Job(
         user_id=user.id,
         job_type="generate_report",
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     db_session.add(job)

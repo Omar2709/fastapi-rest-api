@@ -183,11 +183,21 @@ def job_factory(
         job_type: JobType = JobType.GENERATE_REPORT,
         payload: dict[str, Any] | None = None,
     ) -> Job:
+        job_payload = (
+            payload
+            if payload is not None
+            else {
+                "title": "Test report",
+                "content": "Test report content",
+                "format": "pdf",
+            }
+        )
+
         return submit_job(
             db_session,
             user_id=user_id,
             job_type=job_type,
-            payload=payload or {},
+            payload=job_payload,
         )
 
     return create_job

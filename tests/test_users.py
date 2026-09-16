@@ -365,7 +365,11 @@ def test_delete_user_with_jobs_returns_409(
     job = Job(
         user_id=user["id"],
         job_type="generate_report",
-        payload={},
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
     )
 
     db_session.add(job)

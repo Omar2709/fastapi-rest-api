@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.contracts.jobs import normalize_job_payload
 from app.domain.events import EventType
 from app.domain.jobs import JobStatus, JobType
 from app.models import Job, OutboxEvent
@@ -21,12 +22,17 @@ def submit_job(
     job_type: JobType,
     payload: Mapping[str, Any],
 ) -> Job:
+    validated_payload = normalize_job_payload(
+        job_type=job_type,
+        payload=payload,
+    )
+
     job = Job(
         id=uuid4(),
         user_id=user_id,
         job_type=job_type.value,
         status=JobStatus.PENDING,
-        payload=dict(payload),
+        payload=validated_payload,
         attempts=0,
     )
 

@@ -39,7 +39,8 @@ def test_submit_job_returns_202(
         json={
             "job_type": "generate_report",
             "payload": {
-                "report_id": 42,
+                "title": "Monthly sales",
+                "content": "Report content",
                 "format": "pdf",
             },
         },
@@ -73,7 +74,8 @@ def test_submit_job_returns_202(
     assert stored_job.status == JobStatus.PENDING
 
     assert stored_job.payload == {
-        "report_id": 42,
+        "title": "Monthly sales",
+        "content": "Report content",
         "format": "pdf",
     }
 
@@ -101,7 +103,11 @@ def test_submit_job_requires_api_key(
         "/api/v1/jobs",
         json={
             "job_type": "generate_report",
-            "payload": {},
+            "payload": {
+                "title": "Test report",
+                "content": "Test report content",
+                "format": "pdf",
+            },
         },
     )
 
@@ -127,7 +133,11 @@ def test_submit_job_requires_jobs_write_scope(
         headers=auth_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
-            "payload": {},
+            "payload": {
+                "title": "Test report",
+                "content": "Test report content",
+                "format": "pdf",
+            },
         },
     )
 
@@ -235,11 +245,6 @@ def test_job_owner_comes_from_authenticated_api_key(
         email="ana@example.com",
     )
 
-    second_user = user_factory(
-        name="Carlos",
-        email="carlos@example.com",
-    )
-
     api_key = api_key_factory(
         user_id=first_user["id"],
         scopes=(APIKeyScope.JOBS_WRITE,),
@@ -250,7 +255,11 @@ def test_job_owner_comes_from_authenticated_api_key(
         headers=auth_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
-            "payload": {"requested_user": (second_user["id"])},
+            "payload": {
+                "title": "Monthly sales",
+                "content": "Report content",
+                "format": "pdf",
+            },
         },
     )
 
@@ -295,7 +304,8 @@ def test_get_job_returns_owned_job(
     job = job_factory(
         user_id=user["id"],
         payload={
-            "report_id": 42,
+            "title": "Test report",
+            "content": "Test report content",
             "format": "pdf",
         },
     )
@@ -317,7 +327,8 @@ def test_get_job_returns_owned_job(
     assert data["attempts"] == 0
 
     assert data["payload"] == {
-        "report_id": 42,
+        "title": "Test report",
+        "content": "Test report content",
         "format": "pdf",
     }
 
@@ -463,16 +474,10 @@ def test_list_jobs_returns_only_owner_jobs(
 
     first_job = job_factory(
         user_id=first_user["id"],
-        payload={
-            "job": 1,
-        },
     )
 
     second_job = job_factory(
         user_id=first_user["id"],
-        payload={
-            "job": 2,
-        },
     )
 
     foreign_job = job_factory(
@@ -518,12 +523,9 @@ def test_list_jobs_respects_limit(
         scopes=(APIKeyScope.JOBS_READ,),
     )
 
-    for number in range(3):
+    for _ in range(3):
         job_factory(
             user_id=user["id"],
-            payload={
-                "number": number,
-            },
         )
 
     response = client.get(
@@ -588,7 +590,9 @@ def test_submit_job_location_points_to_status_resource(
         json={
             "job_type": "generate_report",
             "payload": {
-                "report_id": 42,
+                "title": "Test report",
+                "content": "Test report content",
+                "format": "pdf",
             },
         },
     )
@@ -625,3 +629,114 @@ def test_job_queries_are_documented_in_openapi(
     assert {"ApiKeyAuth": []} in jobs_path["get"]["security"]
 
     assert {"ApiKeyAuth": []} in job_detail_path["get"]["security"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {
+            "title": "",
+            "content": "Report content",
+            "format": "pdf",
+        },
+        {
+            "title": "Monthly sales",
+            "content": "   ",
+            "format": "pdf",
+        },
+        {
+            "title": "Monthly sales",
+            "content": "Report content",
+            "format": "docx",
+        },
+        {
+            "title": "Monthly sales",
+            "content": "Report content",
+            "format": "pdf",
+            "unexpected": True,
+        },
+    ],
+)
+def test_submit_job_rejects_invalid_generate_report_payload(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    payload: dict[str, object],
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    response = client.post(
+        "/api/v1/jobs",
+        headers=auth_headers(api_key.raw_key),
+        json={
+            "job_type": "generate_report",
+            "payload": payload,
+        },
+    )
+
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+
+    assert response.json()["error"]["code"] == ("VALIDATION_ERROR")
+
+
+def test_invalid_job_payload_creates_no_records(
+    client: TestClient,
+    db_session: Session,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    response = client.post(
+        "/api/v1/jobs",
+        headers=auth_headers(api_key.raw_key),
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": "Monthly sales",
+                "format": "pdf",
+            },
+        },
+    )
+
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+
+    jobs = db_session.scalars(select(Job).where(Job.user_id == user["id"])).all()
+
+    events = db_session.scalars(select(OutboxEvent)).all()
+
+    assert jobs == []
+    assert events == []
+
+
+def test_generate_report_payload_is_documented_in_openapi(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+
+    job_submit = schema["components"]["schemas"]["JobSubmit"]
+
+    payload_schema = job_submit["properties"]["payload"]
+
+    assert payload_schema == {"$ref": ("#/components/schemas/GenerateReportPayload")}
+
+    report_payload = schema["components"]["schemas"]["GenerateReportPayload"]
+
+    assert set(report_payload["required"]) == {
+        "title",
+        "content",
+        "format",
+    }
+
+    assert report_payload["additionalProperties"] is False

@@ -5,6 +5,10 @@ class JobType(StrEnum):
     GENERATE_REPORT = "generate_report"
 
 
+class ReportFormat(StrEnum):
+    PDF = "pdf"
+
+
 class JobStatus(StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
