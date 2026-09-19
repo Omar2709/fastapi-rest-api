@@ -2,6 +2,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
@@ -100,9 +101,10 @@ def test_publish_outbox_event_queues_job(
 ) -> None:
     user = create_user(db_session)
 
-    job = job_service.submit_job(
+    submission = job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -110,6 +112,8 @@ def test_publish_outbox_event_queues_job(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     broker = RecordingMessageBroker()
 
@@ -155,9 +159,10 @@ def test_broker_failure_keeps_job_pending(
 ) -> None:
     user = create_user(db_session)
 
-    job = job_service.submit_job(
+    submission = job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -165,6 +170,8 @@ def test_broker_failure_keeps_job_pending(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     broker = RecordingMessageBroker(
         failures_remaining=1,
@@ -198,9 +205,10 @@ def test_failed_outbox_event_can_be_retried(
 ) -> None:
     user = create_user(db_session)
 
-    job = job_service.submit_job(
+    submission = job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -208,6 +216,8 @@ def test_failed_outbox_event_can_be_retried(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     broker = RecordingMessageBroker(
         failures_remaining=1,
@@ -250,6 +260,7 @@ def test_published_event_is_not_published_again(
     job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -281,9 +292,10 @@ def test_invalid_job_state_is_detected_before_publish(
 ) -> None:
     user = create_user(db_session)
 
-    job = job_service.submit_job(
+    submission = job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -291,6 +303,8 @@ def test_invalid_job_state_is_detected_before_publish(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     job.status = JobStatus.RUNNING
     db_session.commit()
@@ -315,6 +329,7 @@ def test_concurrent_publishers_do_not_publish_same_event(
     job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -356,9 +371,10 @@ def test_outbox_publisher_can_use_sqs_adapter(
 ) -> None:
     user = create_user(db_session)
 
-    job = job_service.submit_job(
+    submission = job_service.submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -366,6 +382,8 @@ def test_outbox_publisher_can_use_sqs_adapter(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     sqs_client = RecordingSQSClient()
 

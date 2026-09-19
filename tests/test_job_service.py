@@ -33,9 +33,10 @@ def test_submit_job_persists_pending_job(
 ) -> None:
     user = create_user(db_session)
 
-    job = submit_job(
+    submission = submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -43,6 +44,8 @@ def test_submit_job_persists_pending_job(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     assert job.id is not None
     assert job.user_id == user.id
@@ -92,9 +95,10 @@ def test_get_job_returns_owned_job(
 ) -> None:
     user = create_user(db_session)
 
-    created_job = submit_job(
+    submission = submit_job(
         db_session,
         user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -102,6 +106,8 @@ def test_get_job_returns_owned_job(
             "format": "pdf",
         },
     )
+
+    created_job = submission.job
 
     job = job_service.get_job(
         db_session,
@@ -127,9 +133,10 @@ def test_get_job_rejects_foreign_job(
     db_session.commit()
     db_session.refresh(second_user)
 
-    job = job_service.submit_job(
+    submission = job_service.submit_job(
         db_session,
         user_id=second_user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -137,6 +144,8 @@ def test_get_job_rejects_foreign_job(
             "format": "pdf",
         },
     )
+
+    job = submission.job
 
     with pytest.raises(job_service.JobNotFoundError):
         job_service.get_job(
@@ -173,9 +182,10 @@ def test_list_jobs_returns_only_owner_jobs(
     db_session.commit()
     db_session.refresh(second_user)
 
-    first_job = job_service.submit_job(
+    first_submission = job_service.submit_job(
         db_session,
         user_id=first_user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Report 1",
@@ -184,9 +194,12 @@ def test_list_jobs_returns_only_owner_jobs(
         },
     )
 
-    second_job = job_service.submit_job(
+    first_job = first_submission.job
+
+    second_submission = job_service.submit_job(
         db_session,
         user_id=first_user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Report 2",
@@ -195,9 +208,12 @@ def test_list_jobs_returns_only_owner_jobs(
         },
     )
 
-    foreign_job = job_service.submit_job(
+    second_job = second_submission.job
+
+    foreign_submission = job_service.submit_job(
         db_session,
         user_id=second_user.id,
+        idempotency_key=f"test-{uuid4().hex}",
         job_type=JobType.GENERATE_REPORT,
         payload={
             "title": "Test report",
@@ -205,6 +221,8 @@ def test_list_jobs_returns_only_owner_jobs(
             "format": "pdf",
         },
     )
+
+    foreign_job = foreign_submission.job
 
     jobs = job_service.list_jobs(
         db_session,
@@ -252,6 +270,7 @@ def test_submit_job_rolls_back_job_when_outbox_fails(
         job_service.submit_job(
             db_session,
             user_id=user.id,
+            idempotency_key=f"test-{uuid4().hex}",
             job_type=JobType.GENERATE_REPORT,
             payload={
                 "title": "Test report",
@@ -279,6 +298,7 @@ def test_submit_job_rejects_invalid_payload_before_persistence(
         job_service.submit_job(
             db_session,
             user_id=user.id,
+            idempotency_key=f"test-{uuid4().hex}",
             job_type=JobType.GENERATE_REPORT,
             payload={},
         )

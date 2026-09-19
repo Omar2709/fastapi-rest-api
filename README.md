@@ -102,6 +102,9 @@ Este proyecto busca aprender de forma práctica:
 - Control de versiones con Git y GitHub.
 - Uso de Conventional Commits para mantener un historial consistente.
 - Integración continua con GitHub Actions y quality gates automáticos.
+- Idempotencia HTTP mediante `Idempotency-Key`.
+- Fingerprints deterministas SHA-256 sobre payloads normalizados.
+- Control de concurrencia mediante constraints transaccionales de PostgreSQL.
 
 ---
 
@@ -133,7 +136,7 @@ Este proyecto busca aprender de forma práctica:
 
 ## Arquitectura
 
-La arquitectura actual separa el contrato HTTP, la autenticación, los casos de uso, el dominio, la persistencia y las integraciones externas mediante ports y adapters:
+La arquitectura separa el contrato HTTP, la autenticación, los casos de uso, el dominio, la persistencia y las integraciones externas mediante ports y adapters:
 
 ```text
                          Client
@@ -142,32 +145,54 @@ La arquitectura actual separa el contrato HTTP, la autenticación, los casos de 
                            v
                     FastAPI / Routers
                            |
-                  Authentication / Scopes
+                 Authentication / Scopes
                            |
                            v
                         Services
-                      /          \
-                     v            v
-                  Domain      SQLAlchemy ORM
-                                  |
-                                  v
-                              PostgreSQL
-                           /               \
-                          v                 v
-                       Jobs          Outbox Events
-                                         |
-                                         v
-                                  Outbox Publisher
-                                         |
-                                         v
-                                   MessageBroker
-                                        Port
-                                         |
-                                         v
-                                  SQSMessageBroker
-                                         |
-                                         v
-                                    Amazon SQS
+                       /        \
+                      v          v
+                  Domain     SQLAlchemy ORM
+                                 |
+                                 v
+                             PostgreSQL
+                         /       |        \
+                        v        v         v
+                      Jobs   Outbox     Job Idempotency
+                              Events        Keys
+                                |
+                                v
+                         Outbox Publisher
+                                |
+                                v
+                         MessageBroker Port
+                                |
+                                v
+                         SQSMessageBroker
+                                |
+                                v
+                           Amazon SQS
+```
+
+La creación de Jobs añade una capa idempotente antes de persistir una nueva intención:
+
+```text
+POST /api/v1/jobs
+Idempotency-Key: X
+        |
+        v
+validar + normalizar payload
+        |
+        v
+fingerprint SHA-256
+        |
+        v
+buscar (user_id, X)
+     /             \
+ existente        ausente
+    |                |
+    v                v
+ mismo Job      transacción PostgreSQL
+ o 409          Job + Outbox + Idempotency
 ```
 
 ### Responsabilidades
@@ -178,7 +203,11 @@ Configuración transversal de la API: errores, dependencias y router versionado.
 
 `routers/`
 
-Contrato HTTP: rutas, parámetros, códigos de estado y traducción de errores de aplicación.
+Contrato HTTP: rutas, headers, parámetros, códigos de estado y traducción de errores de aplicación.
+
+`contracts/`
+
+Contratos semánticos de payload. Actualmente `contracts/jobs.py` valida y normaliza payloads de Jobs antes de persistirlos o calcular su fingerprint.
 
 `schemas.py`
 
@@ -186,11 +215,11 @@ Modelos Pydantic de entrada y salida.
 
 `services/`
 
-Casos de uso, transacciones y coordinación de persistencia.
+Casos de uso, transacciones, coordinación de persistencia e idempotencia de submit.
 
 `domain/`
 
-Reglas independientes de infraestructura: estados, transiciones y tipos de eventos.
+Reglas independientes de infraestructura: estados, transiciones, tipos de eventos y cálculo determinista de fingerprints de idempotencia.
 
 `security/`
 
@@ -206,7 +235,7 @@ Implementaciones concretas de los ports. Actualmente incluye Amazon SQS mediante
 
 `models.py`
 
-Modelos SQLAlchemy y restricciones PostgreSQL.
+Modelos SQLAlchemy y restricciones PostgreSQL, incluida la persistencia de `job_idempotency_keys`.
 
 `database.py`
 
@@ -222,13 +251,13 @@ Historial de evolución del schema mediante Alembic.
 
 `tests/`
 
-Tests unitarios, HTTP, PostgreSQL, concurrencia, Outbox y adapters externos mediante fakes.
+Tests unitarios, HTTP, PostgreSQL, idempotencia, concurrencia, Outbox y adapters externos mediante fakes.
 
 ---
 
 ## Estructura del proyecto
 
-La estructura principal del proyecto, verificada contra el árbol real, se resume así:
+La estructura principal del proyecto se resume así:
 
 ```text
 fastapi-rest-api/
@@ -245,8 +274,12 @@ fastapi-rest-api/
 │   │   └── v1/
 │   │       └── router.py
 │   │
+│   ├── contracts/
+│   │   └── jobs.py
+│   │
 │   ├── domain/
 │   │   ├── events.py
+│   │   ├── idempotency.py
 │   │   └── jobs.py
 │   │
 │   ├── ports/
@@ -277,6 +310,8 @@ fastapi-rest-api/
 │   └── schemas.py
 │
 ├── migrations/
+│   └── versions/
+│       └── e13e045eeb8b_add_job_idempotency_keys.py
 │
 ├── scripts/
 │   ├── provision_api_key.py
@@ -291,10 +326,11 @@ fastapi-rest-api/
 │   ├── test_api_key_security.py
 │   ├── test_api_key_service.py
 │   ├── test_event_domain.py
-│   ├── test_jobs.py
 │   ├── test_job_domain.py
+│   ├── test_job_idempotency.py
 │   ├── test_job_model.py
 │   ├── test_job_service.py
+│   ├── test_jobs.py
 │   ├── test_main.py
 │   ├── test_openapi.py
 │   ├── test_outbox_model.py
@@ -328,16 +364,20 @@ Las herramientas utilizadas exclusivamente durante desarrollo, como `pytest` y R
 
 ## Modelo de datos
 
-Actualmente existen cuatro recursos relacionados:
+Los recursos principales de la aplicación se apoyan en tablas auxiliares para autenticación, mensajería e idempotencia:
 
 ```text
-              User
-           /    |    \
-          v     v     v
-        Task  ApiKey  Job
+                         User
+                    /      |       \
+                   v       v        v
+                Task    ApiKey     Job
+                                   |
+                                   v
+                         JobIdempotencyKey
+Job --(aggregate_id lógico)--> OutboxEvent
 ```
 
-Un usuario puede tener muchas tareas, muchas API Keys y muchos Jobs; cada Task, ApiKey y Job pertenece a un único usuario.
+Un usuario puede tener muchas tareas, muchas API Keys y muchos Jobs. La idempotencia de creación de Jobs se persiste por propietario mediante `job_idempotency_keys`.
 
 ### `users`
 
@@ -441,6 +481,32 @@ Los Jobs utilizan UUID como identificador público y PostgreSQL `JSONB` para pay
 El estado se persiste como `VARCHAR` protegido mediante una `CHECK constraint`, evitando depender de un ENUM nativo de PostgreSQL.
 
 Los Jobs utilizan `ON DELETE RESTRICT` respecto a su propietario para preservar el historial de procesamiento.
+
+### `job_idempotency_keys`
+
+Cada fila representa una intención de creación de Job identificada dentro del namespace de un propietario.
+
+Campos principales:
+
+```text
+id
+user_id
+idempotency_key
+request_fingerprint
+job_id
+created_at
+```
+
+Garantías principales:
+
+- `UNIQUE(user_id, idempotency_key)` evita que dos requests concurrentes creen dos Jobs para la misma intención.
+- `request_fingerprint` almacena un SHA-256 hexadecimal de 64 caracteres calculado sobre `job_type` y el payload validado y normalizado.
+- `user_id` referencia `users.id` con `ON DELETE CASCADE`.
+- `job_id` referencia `jobs.id` con `ON DELETE CASCADE`.
+- Una misma `Idempotency-Key` puede utilizarse por propietarios distintos sin colisionar.
+- Las keys son case-sensitive y no son credenciales de autenticación.
+- No existe expiración automática de Idempotency-Keys en esta fase.
+- Los Jobs históricos anteriores a esta migración no reciben un registro de idempotencia inventado.
 
 ---
 
@@ -557,9 +623,9 @@ La versión definida en `FastAPI(version="0.1.0")` representa la versión del so
     Los datos enviados no cumplen las validaciones esperadas.
 ```
 
-Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`.
+Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`. También se utiliza `409` cuando una `Idempotency-Key` ya fue empleada por el mismo propietario con una solicitud diferente.
 
-PostgreSQL bloquea primero la eliminación mediante la clave foránea y la aplicación convierte el error de integridad en una respuesta HTTP comprensible.
+PostgreSQL protege las invariantes mediante constraints y la aplicación traduce los conflictos esperados a respuestas HTTP estables.
 
 ---
 
@@ -591,6 +657,7 @@ Actualmente se utilizan códigos como:
 USER_NOT_FOUND
 TASK_NOT_FOUND
 JOB_NOT_FOUND
+IDEMPOTENCY_KEY_CONFLICT
 DUPLICATE_EMAIL
 USER_HAS_TASKS
 VALIDATION_ERROR
@@ -792,6 +859,7 @@ API_KEY_MAX_ACTIVE_PER_USER=10
 ```
 
 > [!WARNING]
+
 > `API_KEY_PEPPER` debe tratarse como un secreto y generarse mediante una fuente criptográficamente segura. Nunca debe versionarse. Cambiarlo invalida las credenciales existentes, porque los HMAC almacenados dejan de coincidir con las credenciales presentadas.
 
 La API Key completa tampoco se almacena en PostgreSQL. La base de datos conserva únicamente su identificador público y un digest HMAC utilizado para verificarla.
@@ -829,17 +897,12 @@ X-API-Key: <api-key>
 
 Las API Keys se validan mediante:
 
-1\. extracción del identificador público `key_id`;
-
-2\. búsqueda de la credencial en PostgreSQL;
-
-3\. verificación criptográfica del digest HMAC;
-
-4\. comprobación de revocación;
-
-5\. comprobación de expiración;
-
-6\. comprobación del estado del propietario.
+1. extracción del identificador público `key_id`;
+2. búsqueda de la credencial en PostgreSQL;
+3. verificación criptográfica del digest HMAC;
+4. comprobación de revocación;
+5. comprobación de expiración;
+6. comprobación del estado del propietario.
 
 Las credenciales inválidas devuelven `401 Unauthorized`.
 
@@ -998,7 +1061,7 @@ Actualmente `generate_report` requiere:
 
 Los campos desconocidos son rechazados.
 
-Los Jobs inválidos se rechazan con `422 VALIDATION_ERROR` antes de persistir el `Job` o su `OutboxEvent`.
+Los Jobs inválidos se rechazan con `422 VALIDATION_ERROR` antes de persistir el `Job`, su `OutboxEvent` o un registro de idempotencia.
 
 El contrato se valida tanto en la frontera HTTP como en el caso de uso `submit_job()`, evitando que callers internos puedan persistir Jobs semánticamente inválidos.
 
@@ -1007,6 +1070,8 @@ El contrato se valida tanto en la frontera HTTP como en el caso de uso `submit_j
 ```http
 POST /api/v1/jobs
 X-API-Key: <api-key>
+Idempotency-Key: <unique-key>
+Content-Type: application/json
 ```
 
 Requiere:
@@ -1014,6 +1079,20 @@ Requiere:
 ```text
 jobs:write
 ```
+
+`Idempotency-Key` es obligatoria para `POST /api/v1/jobs`. Admite entre 1 y 128 caracteres y únicamente:
+
+```text
+A-Z
+a-z
+0-9
+.
+_
+:
+-
+```
+
+Las keys son case-sensitive. Se recomienda utilizar identificadores únicos por intención lógica, por ejemplo UUIDs.
 
 Ejemplo:
 
@@ -1028,11 +1107,13 @@ Ejemplo:
 }
 ```
 
-Respuesta:
+Primera respuesta:
 
 ```http
 202 Accepted
 Location: /api/v1/jobs/{job_id}
+Cache-Control: no-store
+Idempotency-Replayed: false
 ```
 
 ```json
@@ -1047,6 +1128,44 @@ Location: /api/v1/jobs/{job_id}
 `202 Accepted` indica que el Job fue aceptado para procesamiento, no que dicho procesamiento haya terminado. El header `Location` apunta al recurso que permite consultar su estado.
 
 El propietario del Job se obtiene de la API Key autenticada. Campos como `user_id`, `status`, `attempts`, `result` y los timestamps del ciclo de vida son administrados exclusivamente por el servidor.
+
+### Idempotencia al crear Jobs
+
+El backend calcula un fingerprint SHA-256 sobre una representación canónica de:
+
+```text
+job_type
++
+payload validado y normalizado
+```
+
+El fingerprint se calcula después de aplicar el contrato del payload. Por ejemplo, valores equivalentes tras normalización, como `" Monthly sales "` y `"Monthly sales"`, representan la misma intención.
+
+La key se evalúa dentro del namespace del propietario autenticado:
+
+```text
+misma key + mismo usuario + mismo request
+    -> 202, mismo Job
+       Idempotency-Replayed: true
+misma key + mismo usuario + request diferente
+    -> 409 IDEMPOTENCY_KEY_CONFLICT
+misma key + usuario diferente
+    -> operación independiente
+```
+
+Un replay devuelve el mismo recurso lógico y el mismo `Location`. No se mantiene un cache byte-for-byte de la respuesta HTTP histórica: si el Job ya avanzó de estado, el replay puede reflejar el estado actual del mismo Job.
+
+La protección ante concurrencia no depende del `SELECT` previo. La garantía final proviene de PostgreSQL mediante:
+
+```text
+UNIQUE(user_id, idempotency_key)
+```
+
+`Job`, `OutboxEvent` y `JobIdempotencyKey` se crean dentro de la misma transacción. Si dos requests concurrentes compiten por la misma key, uno confirma la transacción y el otro hace rollback, recupera el registro ganador y devuelve el mismo Job.
+
+`Idempotency-Key` es un identificador opaco de operación. No es una API Key, no sustituye autenticación y no se trata como secreto.
+
+En esta fase no existe TTL ni limpieza automática de Idempotency-Keys. Los clientes deben utilizar una nueva key para cada nueva intención lógica.
 
 ### Consultar Jobs
 
@@ -1088,12 +1207,6 @@ Los Jobs están aislados por propietario: cada API Key solo puede consultar los 
 }
 ```
 
-Al enviar un Job, `POST /api/v1/jobs` devuelve `202 Accepted` y un header `Location` que apunta al recurso que permite consultar su estado:
-
-```http
-Location: /api/v1/jobs/{job_id}
-```
-
 Las respuestas de seguimiento utilizan `Cache-Control: no-store` porque el estado del Job puede cambiar durante su procesamiento.
 
 ---
@@ -1102,16 +1215,23 @@ Las respuestas de seguimiento utilizan `Cache-Control: no-store` porque el estad
 
 El submit de un Job utiliza el patrón Transactional Outbox para evitar inconsistencias entre PostgreSQL y el sistema de mensajería.
 
-`Job` y `OutboxEvent` se persisten dentro de una única transacción:
+Con idempotencia habilitada, las tres piezas de la intención se persisten dentro de una única transacción PostgreSQL:
 
 ```text
 BEGIN
 INSERT Job
 INSERT OutboxEvent(job.submitted)
+INSERT JobIdempotencyKey
 COMMIT
 ```
 
-Si cualquiera de las escrituras falla, toda la transacción se revierte. De esta forma, no puede persistirse un Job sin su evento de salida correspondiente ni un evento huérfano sin el Job asociado.
+Si cualquiera de las escrituras falla, toda la transacción se revierte. De esta forma:
+
+- no puede persistirse un Job sin su evento de salida;
+- no puede persistirse un evento huérfano sin el Job asociado;
+- no puede quedar registrada una `Idempotency-Key` que apunte a un Job cuya transacción no fue confirmada.
+
+La constraint `UNIQUE(user_id, idempotency_key)` complementa la atomicidad y protege la creación de Jobs ante carreras concurrentes.
 
 Los eventos pendientes se identifican mediante:
 
@@ -1126,6 +1246,8 @@ Un evento `job.submitted` contiene únicamente información mínima sobre el Job
 El contrato de eventos parte de un versionado inicial para permitir su evolución de forma explícita.
 
 Crear el `OutboxEvent` no significa que el Job ya se encuentre en una cola. Mientras no exista confirmación de publicación, el estado del Job continúa siendo `pending`.
+
+La idempotencia HTTP de `POST /jobs` es independiente de la idempotencia que deberán implementar los futuros consumidores de SQS para tolerar mensajes duplicados bajo semántica at-least-once.
 
 ---
 
@@ -1295,7 +1417,7 @@ Después de modificar los modelos SQLAlchemy:
 uv run alembic revision --autogenerate -m "descripcion del cambio"
 ```
 
-El archivo generado debe revisarse manualmente antes de aplicar la migración:
+El archivo generado debe revisarse manualmente antes de aplicarlo. `--autogenerate` puede proponer alteraciones no relacionadas con el cambio actual, por lo que la migración nunca se acepta sin inspección.
 
 ```bash
 uv run alembic upgrade head
@@ -1313,28 +1435,40 @@ Nueva foreign key          -> requiere migración
 Cambio del esquema SQL     -> requiere migración
 ```
 
-### Cambios de Jobs y scopes sin migración
+### Migración de idempotencia de Jobs
 
-El submit autenticado de Jobs y la ampliación de `APIKeyScope` no modifican el esquema de PostgreSQL.
-
-En este bloque no se modifican:
+La FASE 4A incorpora:
 
 ```text
-jobs schema
-columnas
-constraints
-índices
-foreign keys
+e13e045eeb8b_add_job_idempotency_keys.py
 ```
 
-Ampliar `APIKeyScope` tampoco requiere una migración, porque los scopes de las API Keys se persisten como strings.
-
-Por tanto, para estos cambios:
+Cadena:
 
 ```text
-alembic revision   ❌
-alembic upgrade    ❌
+dd68f1425146
+    |
+    v
+e13e045eeb8b
 ```
+
+La migración crea exclusivamente la tabla:
+
+```text
+job_idempotency_keys
+```
+
+con sus `CHECK constraints`, foreign keys y:
+
+```text
+UNIQUE(user_id, idempotency_key)
+```
+
+No modifica retrospectivamente `jobs`, `outbox_events`, `api_keys`, `users` ni `tasks`.
+
+No se realiza backfill para Jobs históricos. La garantía de idempotencia comienza con los nuevos `POST /api/v1/jobs` posteriores a la incorporación de esta fase.
+
+Una migración aplicada y versionada no se edita retrospectivamente; cualquier ajuste posterior debe realizarse mediante una nueva migración hacia adelante.
 
 ---
 
@@ -1491,14 +1625,33 @@ La suite combina distintos niveles de testing:
 - Tests de integración contra PostgreSQL.
 - Tests de constraints e integridad referencial.
 - Tests de autenticación y autorización mediante API Keys.
-- Tests de Jobs y su máquina de estados.
+- Tests de Jobs, contratos de payload y máquina de estados.
+- Tests de idempotencia HTTP y persistente.
 - Tests de Transactional Outbox.
 - Tests de concurrencia utilizando sesiones PostgreSQL independientes.
 - Tests del adapter SQS mediante fakes, sin depender de una cuenta AWS real.
 
 La suite normal no requiere acceso a servicios AWS.
 
-La estructura actual contiene **18 módulos `test_*.py`**, además de `conftest.py`, con cobertura explícita para API Keys, dominio de eventos y Jobs, modelos y servicios de Jobs, OpenAPI, Outbox Publisher y el adapter SQS.
+La estructura actual contiene **19 módulos `test_*.py`**, además de `conftest.py`. La FASE 4A añade `tests/test_job_idempotency.py` y amplía `tests/test_jobs.py`, `tests/test_job_service.py` y `tests/test_outbox_publisher.py`.
+
+La cobertura de idempotencia verifica, entre otros casos:
+
+```text
+fingerprint determinista
+fingerprint cambia si cambia el request
+Idempotency-Key obligatoria
+header inválido -> 422
+primer submit -> replayed=false
+misma key + mismo request -> mismo Job
+misma key + request diferente -> 409
+normalización semántica del payload
+namespace por usuario
+una sola fila ante submit concurrente
+OpenAPI documenta el header y 409
+```
+
+El test concurrente utiliza dos `Session` independientes y conexiones reales a PostgreSQL. La protección se valida contra la `UNIQUE(user_id, idempotency_key)`, no mediante mocks.
 
 ### Base de datos de testing
 
@@ -1528,6 +1681,13 @@ Las fixtures crean las tablas necesarias para la sesión de tests, limpian los d
 
 ```bash
 uv run pytest
+```
+
+### Ejecutar los tests de idempotencia
+
+```bash
+uv run pytest tests/test_job_idempotency.py -v
+uv run pytest tests/test_jobs.py -v
 ```
 
 ### Ejecutar un archivo concreto
@@ -1721,6 +1881,7 @@ El proyecto aplica actualmente las siguientes prácticas:
 - Contrato uniforme para errores `404`, `405`, `409` y `422` mediante códigos estables.
 - Migraciones de base de datos versionadas.
 - Separación entre routers y services.
+- Contratos de payload separados y normalización antes de persistencia.
 - Dependencias directas declaradas explícitamente.
 - Versiones reproducibles mediante `uv.lock`.
 - Tests de API mediante `pytest` y `TestClient`.
@@ -1740,8 +1901,18 @@ El proyecto aplica actualmente las siguientes prácticas:
 - Prevención de escalamiento de privilegios al delegar scopes.
 - Aislamiento de Jobs por propietario y respuesta uniforme `404 JOB_NOT_FOUND` para recursos inexistentes o ajenos.
 - Respuestas de seguimiento de Jobs con `Cache-Control: no-store`.
+- `Idempotency-Key` obligatoria y validada para creación de Jobs.
+- Fingerprint SHA-256 calculado sobre payload validado y normalizado.
+- Namespace idempotente por propietario mediante `(user_id, idempotency_key)`.
+- Protección de carreras mediante `UNIQUE(user_id, idempotency_key)` en PostgreSQL.
+- `Job`, `OutboxEvent` y registro de idempotencia persistidos atómicamente.
+- Conflictos de reutilización expresados como `409 IDEMPOTENCY_KEY_CONFLICT`.
+- Integración de `Idempotency-Key` y `409` en OpenAPI.
+- Tests concurrentes con sesiones PostgreSQL independientes.
 
-Todavía faltan mecanismos importantes como rate limiting y observabilidad.
+`Idempotency-Key` no es una credencial y no sustituye `X-API-Key`. Tampoco se almacena la API Key raw dentro de la tabla de idempotencia.
+
+Todavía faltan mecanismos importantes como rate limiting, observabilidad, expiración/limpieza de Idempotency-Keys y hardening adicional del Outbox.
 
 ---
 
@@ -1863,6 +2034,7 @@ Nunca debe incluirse `.env`.
 - [x] Manejo de errores `404`, `405`, `409` y `422`.
 - [x] Alembic y migraciones.
 - [x] Arquitectura con routers y services.
+- [x] Contratos de payload en `app/contracts/`.
 - [x] Relación `User 1:N Task`.
 - [x] Foreign keys e integridad referencial.
 - [x] Gestión de dependencias con `uv`.
@@ -1930,6 +2102,7 @@ Nunca debe incluirse `.env`.
 - [x] `202 Accepted` para procesamiento asíncrono.
 - [x] Ownership derivado de API Key.
 - [x] Validación de tipos de Job.
+- [x] Payloads tipados, validados y normalizados.
 - [x] Protección de campos administrados por servidor.
 - [x] GET individual de Jobs.
 - [x] Listado paginado de Jobs.
@@ -1937,9 +2110,22 @@ Nunca debe incluirse `.env`.
 - [x] `404` uniforme para Jobs inexistentes o ajenos.
 - [x] Status resource para Jobs asíncronos.
 - [x] Header `Location` en `202 Accepted`.
+- [x] Idempotencia en `POST /api/v1/jobs`.
+- [x] Header obligatorio `Idempotency-Key`.
+- [x] Validación de formato y longitud de `Idempotency-Key`.
+- [x] Fingerprint SHA-256 determinista sobre request normalizado.
+- [x] Namespace de idempotencia por propietario.
+- [x] Replay de la misma intención devuelve el mismo Job.
+- [x] Header `Idempotency-Replayed`.
+- [x] `409 IDEMPOTENCY_KEY_CONFLICT` para reutilización incompatible.
+- [x] Persistencia `job_idempotency_keys`.
+- [x] Constraint `UNIQUE(user_id, idempotency_key)`.
+- [x] Protección ante submits concurrentes con la misma key.
+- [x] Test concurrente con sesiones PostgreSQL independientes.
+- [x] Migración `e13e045eeb8b_add_job_idempotency_keys`.
 - [x] Transactional Outbox.
 - [x] Evento `job.submitted`.
-- [x] `Job` + `OutboxEvent` en una transacción PostgreSQL.
+- [x] `Job` + `OutboxEvent` + `JobIdempotencyKey` en una transacción PostgreSQL.
 - [x] Rollback atómico ante errores.
 - [x] Índice parcial para eventos pendientes.
 - [x] Versionado inicial de eventos.
@@ -1964,14 +2150,16 @@ Nunca debe incluirse `.env`.
 
 ### Próximos pasos
 
-- [ ] Implementar idempotencia en creación de Jobs.
+- [ ] Hardening del Outbox: errores permanentes, backoff y poison events.
 - [ ] Implementar workers y estrategia de reintentos.
 - [ ] Añadir Dead Letter Queue.
+- [ ] Diseñar idempotencia de consumidores para mensajes duplicados de SQS.
 - [ ] Implementar webhooks firmados con HMAC.
 - [ ] Añadir retry y backoff para webhooks.
 - [ ] Implementar rate limiting.
 - [ ] Añadir logging estructurado y correlation IDs.
 - [ ] Añadir métricas y observabilidad.
+- [ ] Definir retención/TTL y cleanup de Idempotency-Keys cuando corresponda.
 - [ ] Dockerizar los componentes del sistema.
 - [ ] Preparar despliegue y CI/CD en AWS.
 

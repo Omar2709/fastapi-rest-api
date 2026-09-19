@@ -3,12 +3,16 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.events import EventType
 from app.domain.jobs import JobStatus
-from app.models import Job, OutboxEvent
+from app.models import (
+    Job,
+    JobIdempotencyKey,
+    OutboxEvent,
+)
 from app.security.scopes import APIKeyScope
 
 
@@ -17,6 +21,17 @@ def auth_headers(
 ) -> dict[str, str]:
     return {
         "X-API-Key": raw_key,
+    }
+
+
+def job_submit_headers(
+    raw_key: str,
+    *,
+    idempotency_key: str = "test-job-submission-001",
+) -> dict[str, str]:
+    return {
+        "X-API-Key": raw_key,
+        "Idempotency-Key": idempotency_key,
     }
 
 
@@ -35,7 +50,7 @@ def test_submit_job_returns_202(
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
             "payload": {
@@ -55,6 +70,7 @@ def test_submit_job_returns_202(
     assert response.headers["location"] == (f"/api/v1/jobs/{job_id}")
 
     assert response.headers["cache-control"] == ("no-store")
+    assert response.headers["idempotency-replayed"] == "false"
 
     assert data["job_type"] == "generate_report"
     assert data["status"] == JobStatus.PENDING.value
@@ -101,6 +117,9 @@ def test_submit_job_requires_api_key(
 ) -> None:
     response = client.post(
         "/api/v1/jobs",
+        headers={
+            "Idempotency-Key": "missing-api-key-001",
+        },
         json={
             "job_type": "generate_report",
             "payload": {
@@ -114,6 +133,319 @@ def test_submit_job_requires_api_key(
     assert response.status_code == (status.HTTP_401_UNAUTHORIZED)
 
     assert response.json()["error"]["code"] == ("API_KEY_MISSING")
+
+
+def test_submit_job_requires_idempotency_key(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    response = client.post(
+        "/api/v1/jobs",
+        headers=auth_headers(api_key.raw_key),
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": "Test report",
+                "content": ("Test report content"),
+                "format": "pdf",
+            },
+        },
+    )
+
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_same_idempotency_key_and_request_returns_same_job(
+    client: TestClient,
+    db_session: Session,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    headers = job_submit_headers(
+        api_key.raw_key,
+        idempotency_key=("monthly-sales-replay-001"),
+    )
+
+    body = {
+        "job_type": "generate_report",
+        "payload": {
+            "title": "Monthly sales",
+            "content": "Report content",
+            "format": "pdf",
+        },
+    }
+
+    first_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json=body,
+    )
+
+    second_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json=body,
+    )
+
+    assert first_response.status_code == (status.HTTP_202_ACCEPTED)
+
+    assert second_response.status_code == (status.HTTP_202_ACCEPTED)
+
+    assert first_response.json()["id"] == second_response.json()["id"]
+
+    assert second_response.headers["idempotency-replayed"] == "true"
+
+    assert first_response.headers["location"] == second_response.headers["location"]
+
+    job_count = db_session.scalar(
+        select(func.count()).select_from(Job).where(Job.user_id == user["id"])
+    )
+
+    outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+
+    idempotency_count = db_session.scalar(
+        select(func.count()).select_from(JobIdempotencyKey)
+    )
+
+    assert job_count == 1
+    assert outbox_count == 1
+    assert idempotency_count == 1
+
+
+def test_same_idempotency_key_with_different_request_returns_409(
+    client: TestClient,
+    db_session: Session,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    headers = job_submit_headers(
+        api_key.raw_key,
+        idempotency_key=("conflicting-request-001"),
+    )
+
+    first_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": "Monthly sales",
+                "content": "First content",
+                "format": "pdf",
+            },
+        },
+    )
+
+    assert first_response.status_code == (status.HTTP_202_ACCEPTED)
+
+    second_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": "Monthly sales",
+                "content": ("Different content"),
+                "format": "pdf",
+            },
+        },
+    )
+
+    assert second_response.status_code == (status.HTTP_409_CONFLICT)
+
+    assert second_response.json() == {
+        "error": {
+            "code": ("IDEMPOTENCY_KEY_CONFLICT"),
+            "message": (
+                "La Idempotency-Key ya fue utilizada con una solicitud diferente"
+            ),
+            "details": None,
+        }
+    }
+
+    job_count = db_session.scalar(
+        select(func.count()).select_from(Job).where(Job.user_id == user["id"])
+    )
+
+    outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+
+    idempotency_count = db_session.scalar(
+        select(func.count()).select_from(JobIdempotencyKey)
+    )
+
+    assert job_count == 1
+    assert outbox_count == 1
+    assert idempotency_count == 1
+
+
+def test_idempotency_uses_normalized_job_payload(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    headers = job_submit_headers(
+        api_key.raw_key,
+        idempotency_key=("normalized-request-001"),
+    )
+
+    first_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": " Monthly sales ",
+                "content": " Report content ",
+                "format": "pdf",
+            },
+        },
+    )
+
+    second_response = client.post(
+        "/api/v1/jobs",
+        headers=headers,
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": "Monthly sales",
+                "content": "Report content",
+                "format": "pdf",
+            },
+        },
+    )
+
+    assert first_response.json()["id"] == second_response.json()["id"]
+
+    assert second_response.headers["idempotency-replayed"] == "true"
+
+
+def test_idempotency_key_namespace_is_per_user(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+) -> None:
+    first_user = user_factory(
+        name="Ana",
+        email="ana@example.com",
+    )
+
+    second_user = user_factory(
+        name="Carlos",
+        email="carlos@example.com",
+    )
+
+    first_key = api_key_factory(
+        user_id=first_user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    second_key = api_key_factory(
+        user_id=second_user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    body = {
+        "job_type": "generate_report",
+        "payload": {
+            "title": "Test report",
+            "content": "Test content",
+            "format": "pdf",
+        },
+    }
+
+    first_response = client.post(
+        "/api/v1/jobs",
+        headers=job_submit_headers(
+            first_key.raw_key,
+            idempotency_key=("shared-key-001"),
+        ),
+        json=body,
+    )
+
+    second_response = client.post(
+        "/api/v1/jobs",
+        headers=job_submit_headers(
+            second_key.raw_key,
+            idempotency_key=("shared-key-001"),
+        ),
+        json=body,
+    )
+
+    assert first_response.status_code == 202
+    assert second_response.status_code == 202
+
+    assert first_response.json()["id"] != second_response.json()["id"]
+
+
+@pytest.mark.parametrize(
+    "idempotency_key",
+    [
+        "",
+        "contains spaces",
+        "x" * 129,
+    ],
+)
+def test_submit_job_rejects_invalid_idempotency_key(
+    client: TestClient,
+    user_factory,
+    api_key_factory,
+    idempotency_key: str,
+) -> None:
+    user = user_factory()
+
+    api_key = api_key_factory(
+        user_id=user["id"],
+        scopes=(APIKeyScope.JOBS_WRITE,),
+    )
+
+    response = client.post(
+        "/api/v1/jobs",
+        headers={
+            "X-API-Key": api_key.raw_key,
+            "Idempotency-Key": idempotency_key,
+        },
+        json={
+            "job_type": "generate_report",
+            "payload": {
+                "title": "Test report",
+                "content": "Test content",
+                "format": "pdf",
+            },
+        },
+    )
+
+    assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
 
 
 def test_submit_job_requires_jobs_write_scope(
@@ -130,7 +462,7 @@ def test_submit_job_requires_jobs_write_scope(
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
             "payload": {
@@ -164,10 +496,14 @@ def test_submit_job_rejects_unknown_job_type(
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json={
             "job_type": "unknown_job",
-            "payload": {},
+            "payload": {
+                "title": "Test report",
+                "content": "Test report content",
+                "format": "pdf",
+            },
         },
     )
 
@@ -219,13 +555,17 @@ def test_submit_job_rejects_server_managed_fields(
 
     body = {
         "job_type": "generate_report",
-        "payload": {},
+        "payload": {
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
         field: value,
     }
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json=body,
     )
 
@@ -252,7 +592,7 @@ def test_job_owner_comes_from_authenticated_api_key(
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
             "payload": {
@@ -582,11 +922,17 @@ def test_submit_job_location_points_to_status_resource(
         ),
     )
 
-    headers = auth_headers(api_key.raw_key)
+    submit_headers = job_submit_headers(
+        api_key.raw_key,
+    )
+
+    read_headers = auth_headers(
+        api_key.raw_key,
+    )
 
     submit_response = client.post(
         "/api/v1/jobs",
-        headers=headers,
+        headers=submit_headers,
         json={
             "job_type": "generate_report",
             "payload": {
@@ -603,7 +949,7 @@ def test_submit_job_location_points_to_status_resource(
 
     status_response = client.get(
         location,
-        headers=headers,
+        headers=read_headers,
     )
 
     assert status_response.status_code == (status.HTTP_200_OK)
@@ -673,7 +1019,7 @@ def test_submit_job_rejects_invalid_generate_report_payload(
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
             "payload": payload,
@@ -700,7 +1046,7 @@ def test_invalid_job_payload_creates_no_records(
 
     response = client.post(
         "/api/v1/jobs",
-        headers=auth_headers(api_key.raw_key),
+        headers=job_submit_headers(api_key.raw_key),
         json={
             "job_type": "generate_report",
             "payload": {
@@ -740,3 +1086,23 @@ def test_generate_report_payload_is_documented_in_openapi(
     }
 
     assert report_payload["additionalProperties"] is False
+
+
+def test_job_submission_documents_idempotency_key(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+
+    operation = schema["paths"]["/api/v1/jobs"]["post"]
+
+    idempotency_parameter = next(
+        parameter
+        for parameter in operation["parameters"]
+        if (parameter["name"] == "Idempotency-Key")
+    )
+
+    assert idempotency_parameter["in"] == "header"
+
+    assert idempotency_parameter["required"] is True
+
+    assert "409" in operation["responses"]

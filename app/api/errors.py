@@ -38,6 +38,8 @@ class ErrorCode(StrEnum):
 
     JOB_NOT_FOUND = "JOB_NOT_FOUND"
 
+    IDEMPOTENCY_KEY_CONFLICT = "IDEMPOTENCY_KEY_CONFLICT"
+
 
 class ValidationErrorDetail(BaseModel):
     field: str

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     Path,
     Query,
     Response,
@@ -18,6 +19,10 @@ from app.api.errors import (
     ErrorResponse,
 )
 from app.database import get_db
+from app.domain.idempotency import (
+    IDEMPOTENCY_KEY_MAX_LENGTH,
+    IDEMPOTENCY_KEY_PATTERN,
+)
 from app.schemas import (
     JobAcceptedResponse,
     JobDetailResponse,
@@ -79,6 +84,18 @@ JobListOffset = Annotated[
 ]
 
 
+IdempotencyKeyHeader = Annotated[
+    str,
+    Header(
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=IDEMPOTENCY_KEY_MAX_LENGTH,
+        pattern=IDEMPOTENCY_KEY_PATTERN,
+        description=("Identificador único y opaco de la operación de submit."),
+    ),
+]
+
+
 @router.post(
     "",
     response_model=JobAcceptedResponse,
@@ -92,6 +109,10 @@ JobListOffset = Annotated[
             "model": ErrorResponse,
             "description": "Insufficient scope",
         },
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Idempotency key conflict",
+        },
     },
     description=(
         "Acepta un Job para procesamiento asíncrono. Requiere el scope `jobs:write`."
@@ -102,17 +123,33 @@ def submit_job(
     current_api_key: JobsWriter,
     db: DbSession,
     response: Response,
+    idempotency_key: IdempotencyKeyHeader,
 ) -> JobAcceptedResponse:
-    job = job_service.submit_job(
-        db,
-        user_id=current_api_key.user_id,
-        job_type=job_data.job_type,
-        payload=job_data.payload.model_dump(mode="json"),
-    )
+    try:
+        submission = job_service.submit_job(
+            db,
+            user_id=current_api_key.user_id,
+            idempotency_key=idempotency_key,
+            job_type=job_data.job_type,
+            payload=job_data.payload.model_dump(mode="json"),
+        )
+
+    except job_service.IdempotencyKeyConflictError as exc:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code=(ErrorCode.IDEMPOTENCY_KEY_CONFLICT),
+            message=("La Idempotency-Key ya fue utilizada con una solicitud diferente"),
+        ) from exc
+
+    job = submission.job
 
     response.headers["Location"] = f"/api/v1/jobs/{job.id}"
 
     response.headers["Cache-Control"] = "no-store"
+
+    response.headers["Idempotency-Replayed"] = (
+        "true" if submission.replayed else "false"
+    )
 
     return JobAcceptedResponse.model_validate(job)
 

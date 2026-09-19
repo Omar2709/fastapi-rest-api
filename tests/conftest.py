@@ -1,6 +1,7 @@
 from collections.abc import Callable, Generator
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi import status
@@ -193,11 +194,14 @@ def job_factory(
             }
         )
 
-        return submit_job(
+        submission = submit_job(
             db_session,
             user_id=user_id,
+            idempotency_key=f"test-{uuid4().hex}",
             job_type=job_type,
             payload=job_payload,
         )
+
+        return submission.job
 
     return create_job

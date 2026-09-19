@@ -330,6 +330,68 @@ class Job(Base):
     )
 
 
+class JobIdempotencyKey(Base):
+    __tablename__ = "job_idempotency_keys"
+
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(idempotency_key) BETWEEN 1 AND 128",
+            name="job_idempotency_keys_key_length_check",
+        ),
+        CheckConstraint(
+            "char_length(request_fingerprint) = 64",
+            name="job_idempotency_keys_fingerprint_length_check",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "idempotency_key",
+            name="uq_job_idempotency_keys_user_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True),
+        primary_key=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "users.id",
+            name="fk_job_idempotency_keys_user_id_users",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    idempotency_key: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+
+    request_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "jobs.id",
+            name="fk_job_idempotency_keys_job_id_jobs",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class OutboxEvent(Base):
     __tablename__ = "outbox_events"
 
