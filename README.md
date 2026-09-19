@@ -105,8 +105,10 @@ Este proyecto busca aprender de forma práctica:
 - Idempotencia HTTP mediante `Idempotency-Key`.
 - Fingerprints deterministas SHA-256 sobre payloads normalizados.
 - Control de concurrencia mediante constraints transaccionales de PostgreSQL.
-
----
+- Transactional Outbox con publicación at-least-once.
+- Clasificación de errores transitorios y permanentes del broker.
+- Exponential backoff, límites de reintentos y aislamiento de poison events.
+- Diseño de publishers concurrentes con `FOR UPDATE SKIP LOCKED`.
 
 ## Tecnologías
 
@@ -195,6 +197,31 @@ buscar (user_id, X)
  o 409          Job + Outbox + Idempotency
 ```
 
+El publisher endurecido selecciona únicamente eventos elegibles y separa fallos transitorios de fallos terminales:
+
+```text
+OutboxEvent
+    |
+    v
+¿published_at IS NULL
+ AND failed_at IS NULL
+ AND available_at <= now()?
+    |
+    +-- no --> ignorar por ahora
+    |
+    v
+validar + publicar
+    |
+    +-- éxito ------------------> published_at
+    |
+    +-- error transitorio ------> attempts++
+    |                             available_at futuro
+    |                             exponential backoff
+    |
+    +-- error permanente -------> attempts++
+                                  failed_at
+```
+
 ### Responsabilidades
 
 `api/`
@@ -215,7 +242,7 @@ Modelos Pydantic de entrada y salida.
 
 `services/`
 
-Casos de uso, transacciones, coordinación de persistencia e idempotencia de submit.
+Casos de uso, transacciones, coordinación de persistencia, idempotencia de submit y lógica del Outbox Publisher, incluidos retries y fallos terminales.
 
 `domain/`
 
@@ -227,7 +254,7 @@ Generación/verificación de API Keys y scopes.
 
 `ports/`
 
-Interfaces que la aplicación necesita de sistemas externos, como `MessageBroker`.
+Interfaces que la aplicación necesita de sistemas externos. `MessageBroker` distingue errores retryable y permanent sin acoplar el dominio a Amazon SQS.
 
 `adapters/`
 
@@ -235,7 +262,7 @@ Implementaciones concretas de los ports. Actualmente incluye Amazon SQS mediante
 
 `models.py`
 
-Modelos SQLAlchemy y restricciones PostgreSQL, incluida la persistencia de `job_idempotency_keys`.
+Modelos SQLAlchemy y restricciones PostgreSQL, incluida la persistencia de `job_idempotency_keys` y los estados derivados del Transactional Outbox.
 
 `database.py`
 
@@ -251,7 +278,7 @@ Historial de evolución del schema mediante Alembic.
 
 `tests/`
 
-Tests unitarios, HTTP, PostgreSQL, idempotencia, concurrencia, Outbox y adapters externos mediante fakes.
+Tests unitarios, HTTP, PostgreSQL, idempotencia, concurrencia, Outbox, backoff, poison events y adapters externos mediante fakes.
 
 ---
 
@@ -263,81 +290,81 @@ La estructura principal del proyecto se resume así:
 fastapi-rest-api/
 |
 ├── app/
-│   ├── adapters/
-│   │   └── aws/
-│   │       └── sqs.py
-│   │
-│   ├── api/
-│   │   ├── dependencies/
-│   │   │   └── auth.py
-│   │   ├── errors.py
-│   │   └── v1/
-│   │       └── router.py
-│   │
-│   ├── contracts/
-│   │   └── jobs.py
-│   │
-│   ├── domain/
-│   │   ├── events.py
-│   │   ├── idempotency.py
-│   │   └── jobs.py
-│   │
-│   ├── ports/
-│   │   └── message_broker.py
-│   │
-│   ├── routers/
-│   │   ├── api_keys.py
-│   │   ├── auth.py
-│   │   ├── jobs.py
-│   │   ├── tasks.py
-│   │   └── users.py
-│   │
-│   ├── security/
-│   │   ├── api_keys.py
-│   │   └── scopes.py
-│   │
-│   ├── services/
-│   │   ├── api_keys.py
-│   │   ├── jobs.py
-│   │   ├── outbox.py
-│   │   ├── tasks.py
-│   │   └── users.py
-│   │
-│   ├── config.py
-│   ├── database.py
-│   ├── main.py
-│   ├── models.py
-│   └── schemas.py
+│   ├── adapters/
+│   │   └── aws/
+│   │       └── sqs.py
+│   │
+│   ├── api/
+│   │   ├── dependencies/
+│   │   │   └── auth.py
+│   │   ├── errors.py
+│   │   └── v1/
+│   │       └── router.py
+│   │
+│   ├── contracts/
+│   │   └── jobs.py
+│   │
+│   ├── domain/
+│   │   ├── events.py
+│   │   ├── idempotency.py
+│   │   └── jobs.py
+│   │
+│   ├── ports/
+│   │   └── message_broker.py
+│   │
+│   ├── routers/
+│   │   ├── api_keys.py
+│   │   ├── auth.py
+│   │   ├── jobs.py
+│   │   ├── tasks.py
+│   │   └── users.py
+│   │
+│   ├── security/
+│   │   ├── api_keys.py
+│   │   └── scopes.py
+│   │
+│   ├── services/
+│   │   ├── api_keys.py
+│   │   ├── jobs.py
+│   │   ├── outbox.py
+│   │   ├── tasks.py
+│   │   └── users.py
+│   │
+│   ├── config.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models.py
+│   └── schemas.py
 │
 ├── migrations/
-│   └── versions/
-│       └── e13e045eeb8b_add_job_idempotency_keys.py
+│   └── versions/
+│       └── e13e045eeb8b_add_job_idempotency_keys.py
 │
 ├── scripts/
-│   ├── provision_api_key.py
-│   └── publish_outbox.py
+│   ├── provision_api_key.py
+│   └── publish_outbox.py
 │
 ├── tests/
-│   ├── conftest.py
-│   ├── test_api_key_auth.py
-│   ├── test_api_key_management.py
-│   ├── test_api_key_model.py
-│   ├── test_api_key_scopes.py
-│   ├── test_api_key_security.py
-│   ├── test_api_key_service.py
-│   ├── test_event_domain.py
-│   ├── test_job_domain.py
-│   ├── test_job_idempotency.py
-│   ├── test_job_model.py
-│   ├── test_job_service.py
-│   ├── test_jobs.py
-│   ├── test_main.py
-│   ├── test_openapi.py
-│   ├── test_outbox_model.py
-│   ├── test_outbox_publisher.py
-│   ├── test_sqs_adapter.py
-│   ├── test_tasks.py
-│   └── test_users.py
+│   ├── conftest.py
+│   ├── test_api_key_auth.py
+│   ├── test_api_key_management.py
+│   ├── test_api_key_model.py
+│   ├── test_api_key_scopes.py
+│   ├── test_api_key_security.py
+│   ├── test_api_key_service.py
+│   ├── test_event_domain.py
+│   ├── test_job_domain.py
+│   ├── test_job_idempotency.py
+│   ├── test_job_model.py
+│   ├── test_job_service.py
+│   ├── test_jobs.py
+│   ├── test_main.py
+│   ├── test_openapi.py
+│   ├── test_outbox_model.py
+│   ├── test_outbox_publisher.py
+│   ├── test_sqs_adapter.py
+│   ├── test_tasks.py
+│   └── test_users.py
 │
 ├── .env.example
 ├── alembic.ini
@@ -367,13 +394,13 @@ Las herramientas utilizadas exclusivamente durante desarrollo, como `pytest` y R
 Los recursos principales de la aplicación se apoyan en tablas auxiliares para autenticación, mensajería e idempotencia:
 
 ```text
-                         User
-                    /      |       \
-                   v       v        v
-                Task    ApiKey     Job
-                                   |
-                                   v
-                         JobIdempotencyKey
+                         User
+                    /      |       \\
+                   v       v        v
+                Task    ApiKey     Job
+                                   |
+                                   v
+                         JobIdempotencyKey
 Job --(aggregate_id lógico)--> OutboxEvent
 ```
 
@@ -508,6 +535,49 @@ Garantías principales:
 - No existe expiración automática de Idempotency-Keys en esta fase.
 - Los Jobs históricos anteriores a esta migración no reciben un registro de idempotencia inventado.
 
+### `outbox_events`
+
+`outbox_events` persiste mensajes de integración dentro de la misma transacción que modifica el estado de negocio.
+
+Campos relevantes:
+
+```text
+id
+event_type
+event_version
+aggregate_type
+aggregate_id
+payload
+attempts
+last_error
+created_at
+available_at
+published_at
+failed_at
+```
+
+Estados derivados:
+
+```text
+pending / retry
+    published_at = NULL
+    failed_at = NULL
+
+published
+    published_at != NULL
+    failed_at = NULL
+
+terminal failure
+    published_at = NULL
+    failed_at != NULL
+```
+
+`available_at` indica el momento más temprano en el que un evento puede volver a ser seleccionado. El publisher solo considera eventos con `available_at <= now()`.
+
+PostgreSQL impide que un evento esté publicado y fallido simultáneamente mediante `outbox_events_not_published_and_failed_check`.
+
+El índice parcial `ix_outbox_events_publishable_available_at` ordena los eventos publicables por `available_at`, `created_at` e `id`, excluyendo los eventos ya publicados o terminalmente fallidos.
+
 ---
 
 ## Endpoints
@@ -578,9 +648,9 @@ Los endpoints de negocio se publican bajo un prefijo de versión:
 Por ejemplo:
 
 ```text
-GET  /api/v1/users
+GET  /api/v1/users
 POST /api/v1/users
-GET  /api/v1/tasks/{task_id}
+GET  /api/v1/tasks/{task_id}
 ```
 
 El versionado permite evolucionar el contrato HTTP de la API sin introducir cambios incompatibles directamente sobre los endpoints existentes.
@@ -602,25 +672,25 @@ La versión definida en `FastAPI(version="0.1.0")` representa la versión del so
 
 ```text
 200 OK
-    Operación realizada correctamente.
+    Operación realizada correctamente.
 201 Created
-    Se creó un nuevo recurso.
+    Se creó un nuevo recurso.
 202 Accepted
-    La solicitud fue aceptada para procesamiento asíncrono, pero el procesamiento todavía no ha finalizado.
+    La solicitud fue aceptada para procesamiento asíncrono, pero el procesamiento todavía no ha finalizado.
 204 No Content
-    El recurso fue eliminado correctamente.
+    El recurso fue eliminado correctamente.
 401 Unauthorized
-    La solicitud no incluye una credencial válida para acceder al recurso protegido.
+    La solicitud no incluye una credencial válida para acceder al recurso protegido.
 403 Forbidden
-    La credencial es válida, pero no posee los scopes requeridos para la operación.
+    La credencial es válida, pero no posee los scopes requeridos para la operación.
 404 Not Found
-    El recurso solicitado no existe.
+    El recurso solicitado no existe.
 405 Method Not Allowed
-    El método HTTP no está permitido para la ruta solicitada.
+    El método HTTP no está permitido para la ruta solicitada.
 409 Conflict
-    La operación entra en conflicto con el estado actual de los datos.
+    La operación entra en conflicto con el estado actual de los datos.
 422 Unprocessable Entity
-    Los datos enviados no cumplen las validaciones esperadas.
+    Los datos enviados no cumplen las validaciones esperadas.
 ```
 
 Por ejemplo, intentar eliminar un usuario que todavía tiene tareas asociadas devuelve `409 Conflict`. También se utiliza `409` cuando una `Idempotency-Key` ya fue empleada por el mismo propietario con una solicitud diferente.
@@ -635,11 +705,11 @@ Los errores de la API utilizan una estructura uniforme:
 
 ```json
 {
-  "error": {
-    "code": "USER_NOT_FOUND",
-    "message": "Usuario no encontrado",
-    "details": null
-  }
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "Usuario no encontrado",
+    "details": null
+  }
 }
 ```
 
@@ -676,17 +746,17 @@ Los errores de validación utilizan el código `VALIDATION_ERROR` y pueden inclu
 
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Los datos enviados no son válidos",
-    "details": [
-      {
-        "field": "body.email",
-        "message": "valor inválido",
-        "type": "value_error"
-      }
-    ]
-  }
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Los datos enviados no son válidos",
+    "details": [
+      {
+        "field": "body.email",
+        "message": "valor inválido",
+        "type": "value_error"
+      }
+    ]
+  }
 }
 ```
 
@@ -867,20 +937,20 @@ La API Key completa tampoco se almacena en PostgreSQL. La base de datos conserva
 ### Provisionar una API Key
 
 ```powershell
-uv run python -m scripts.provision_api_key `
-    --user-id 1 `
-    --name "Local administration" `
-    --scope api-keys:read `
-    --scope api-keys:write
+uv run python -m scripts.provision_api_key \`
+    --user-id 1 \`
+    --name "Local administration" \`
+    --scope api-keys:read \`
+    --scope api-keys:write
 ```
 
 También puede establecerse una expiración:
 
 ```bash
-uv run python -m scripts.provision_api_key \
-    --user-id 1 \
-    --name "Temporary integration" \
-    --expires-in-days 90
+uv run python -m scripts.provision_api_key \\
+    --user-id 1 \\
+    --name "Temporary integration" \\
+    --expires-in-days 90
 ```
 
 La credencial completa se muestra únicamente durante el provisionamiento y debe tratarse como un secreto.
@@ -910,11 +980,11 @@ Ejemplo:
 
 ```json
 {
-  "error": {
-    "code": "API_KEY_INVALID",
-    "message": "API Key inválida",
-    "details": null
-  }
+  "error": {
+    "code": "API_KEY_INVALID",
+    "message": "API Key inválida",
+    "details": null
+  }
 }
 ```
 
@@ -992,17 +1062,17 @@ Una API Key autenticada que no posee el scope requerido recibe:
 
 ```json
 {
-  "error": {
-    "code": "INSUFFICIENT_SCOPE",
-    "message": "La API Key no tiene los scopes requeridos",
-    "details": [
-      {
-        "missing_scopes": [
-          "api-keys:write"
-        ]
-      }
-    ]
-  }
+  "error": {
+    "code": "INSUFFICIENT_SCOPE",
+    "message": "La API Key no tiene los scopes requeridos",
+    "details": [
+      {
+        "missing_scopes": [
+          "api-keys:write"
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -1020,14 +1090,14 @@ Un Job representa una unidad de trabajo cuyo ciclo de vida se controla mediante 
 
 ```text
 pending
-   |
-   v
+   |
+   v
 queued
-   |
-   v
+   |
+   v
 running
- /     \
-v       v
+ /     \\
+v       v
 succeeded
 failed
 ```
@@ -1053,9 +1123,9 @@ Actualmente `generate_report` requiere:
 
 ```json
 {
-  "title": "Monthly sales",
-  "content": "Report content",
-  "format": "pdf"
+  "title": "Monthly sales",
+  "content": "Report content",
+  "format": "pdf"
 }
 ```
 
@@ -1098,12 +1168,12 @@ Ejemplo:
 
 ```json
 {
-  "job_type": "generate_report",
-  "payload": {
-    "title": "Monthly sales",
-    "content": "Report content",
-    "format": "pdf"
-  }
+  "job_type": "generate_report",
+  "payload": {
+    "title": "Monthly sales",
+    "content": "Report content",
+    "format": "pdf"
+  }
 }
 ```
 
@@ -1118,10 +1188,10 @@ Idempotency-Replayed: false
 
 ```json
 {
-  "id": "4a973290-14d6-4daf-b564-986203494ceb",
-  "job_type": "generate_report",
-  "status": "pending",
-  "created_at": "..."
+  "id": "4a973290-14d6-4daf-b564-986203494ceb",
+  "job_type": "generate_report",
+  "status": "pending",
+  "created_at": "..."
 }
 ```
 
@@ -1145,12 +1215,12 @@ La key se evalúa dentro del namespace del propietario autenticado:
 
 ```text
 misma key + mismo usuario + mismo request
-    -> 202, mismo Job
-       Idempotency-Replayed: true
+    -> 202, mismo Job
+       Idempotency-Replayed: true
 misma key + mismo usuario + request diferente
-    -> 409 IDEMPOTENCY_KEY_CONFLICT
+    -> 409 IDEMPOTENCY_KEY_CONFLICT
 misma key + usuario diferente
-    -> operación independiente
+    -> operación independiente
 ```
 
 Un replay devuelve el mismo recurso lógico y el mismo `Location`. No se mantiene un cache byte-for-byte de la respuesta HTTP histórica: si el Job ya avanzó de estado, el replay puede reflejar el estado actual del mismo Job.
@@ -1199,11 +1269,11 @@ Los Jobs están aislados por propietario: cada API Key solo puede consultar los 
 
 ```json
 {
-  "error": {
-    "code": "JOB_NOT_FOUND",
-    "message": "Job no encontrado",
-    "details": null
-  }
+  "error": {
+    "code": "JOB_NOT_FOUND",
+    "message": "Job no encontrado",
+    "details": null
+  }
 }
 ```
 
@@ -1233,19 +1303,28 @@ Si cualquiera de las escrituras falla, toda la transacción se revierte. De esta
 
 La constraint `UNIQUE(user_id, idempotency_key)` complementa la atomicidad y protege la creación de Jobs ante carreras concurrentes.
 
-Los eventos pendientes se identifican mediante:
+Un evento pendiente o en espera de retry cumple:
 
 ```text
 published_at IS NULL
+failed_at IS NULL
 ```
 
-La consulta de eventos pendientes se apoya en un índice parcial para evitar recorrer eventos que ya fueron publicados.
+Además, solo es publicable cuando:
+
+```text
+available_at <= now()
+```
+
+`available_at` se inicializa con `now()` y, ante un fallo transitorio, se mueve hacia el futuro aplicando exponential backoff.
 
 Un evento `job.submitted` contiene únicamente información mínima sobre el Job. El payload completo del procesamiento permanece en la tabla `jobs`.
 
-El contrato de eventos parte de un versionado inicial para permitir su evolución de forma explícita.
-
 Crear el `OutboxEvent` no significa que el Job ya se encuentre en una cola. Mientras no exista confirmación de publicación, el estado del Job continúa siendo `pending`.
+
+Si el evento alcanza un fallo terminal (`failed_at != NULL`), el Job también permanece `pending`. No se marca como `failed` porque el trabajo todavía no llegó a ejecutarse y la máquina de estados actual solo permite `running -> failed`. Esa combinación requiere futura intervención operacional o un mecanismo administrativo de requeue.
+
+> `failed_at` en el Transactional Outbox **no es una SQS Dead Letter Queue**. El evento falló antes de llegar a SQS; una DLQ pertenece a la frontera de consumo y procesamiento posterior.
 
 La idempotencia HTTP de `POST /jobs` es independiente de la idempotencia que deberán implementar los futuros consumidores de SQS para tolerar mensajes duplicados bajo semántica at-least-once.
 
@@ -1268,7 +1347,30 @@ MessageBroker
        +-- SQSMessageBroker -> Amazon SQS Standard Queue
 ```
 
-El publisher selecciona eventos pendientes utilizando PostgreSQL:
+Los errores del broker se clasifican en:
+
+```text
+RetryableMessageBrokerError
+    conexión
+    timeout
+    indisponibilidad temporal
+    error AWS tratado conservadoramente como temporal
+
+PermanentMessageBrokerError
+    envelope inválido
+    serialización imposible
+    mensaje demasiado grande
+```
+
+El publisher selecciona únicamente eventos publicables:
+
+```sql
+published_at IS NULL
+AND failed_at IS NULL
+AND available_at <= now()
+```
+
+y utiliza:
 
 ```sql
 FOR UPDATE SKIP LOCKED
@@ -1279,25 +1381,55 @@ Esto permite que múltiples publishers trabajen concurrentemente sin seleccionar
 Cuando `job.submitted` se publica correctamente:
 
 ```text
+OutboxEvent.attempts += 1
+OutboxEvent.last_error = NULL
 OutboxEvent.published_at = timestamp
+
 Job.status = queued
 Job.queued_at = timestamp
 ```
 
-Si el broker falla:
+Ante un error transitorio:
 
 ```text
 OutboxEvent.attempts += 1
 OutboxEvent.last_error = ...
-OutboxEvent.published_at = NULL
+OutboxEvent.available_at = now + exponential_backoff
 Job.status = pending
 ```
 
-La arquitectura utiliza semántica **at-least-once**. Existe una pequeña ventana entre la confirmación del broker y el commit de PostgreSQL en la que un evento podría publicarse nuevamente después de un fallo.
+La política configurable utiliza:
 
-Por esta razón cada mensaje incluye un `event_id` estable y los consumidores deberán ser idempotentes.
+```text
+delay = min(
+    retry_base_seconds * 2 ** (attempt - 1),
+    retry_max_seconds
+)
+```
 
-Esto documenta justamente la garantía real de la fase: **at-least-once**, no exactly-once.
+Con los valores predeterminados (`base=5`, `max=300`, `max_attempts=5`), los fallos siguen conceptualmente:
+
+```text
+attempt 1 -> 5 s
+attempt 2 -> 10 s
+attempt 3 -> 20 s
+attempt 4 -> 40 s
+attempt 5 -> fallo terminal
+```
+
+Cuando se alcanza el máximo de intentos, o cuando el error es permanentemente inválido:
+
+```text
+OutboxEvent.failed_at = timestamp
+```
+
+El evento deja de ser elegible y no bloquea eventos posteriores. Un poison event se aísla de la misma forma.
+
+El script `scripts.publish_outbox` continúa recorriendo el lote después de un retry programado o un fallo terminal. Al finalizar informa cuántos eventos fueron publicados, cuántos retries fueron programados y cuántos fallos permanentes ocurrieron. Si hubo retries o fallos terminales, devuelve un código de salida distinto de cero sin impedir que eventos sanos del mismo lote sean procesados.
+
+La arquitectura continúa teniendo semántica **at-least-once**. Existe una pequeña ventana entre la confirmación del broker y el commit de PostgreSQL en la que un evento podría publicarse nuevamente después de un fallo.
+
+Por esta razón cada mensaje incluye un `event_id` estable y los consumidores deberán ser idempotentes. La garantía es **at-least-once**, no exactly-once.
 
 ---
 
@@ -1320,6 +1452,8 @@ Amazon SQS Standard Queue
 
 Los eventos se serializan como JSON versionado e incluyen un `event_id` estable.
 
+El adapter clasifica errores locales deterministas, como envelopes inválidos o mensajes demasiado grandes, como `PermanentMessageBrokerError`. Los errores reportados por Boto3/Botocore se clasifican de forma conservadora como `RetryableMessageBrokerError`; el límite de intentos del Outbox evita retries infinitos.
+
 El cliente AWS utiliza:
 
 ```text
@@ -1328,6 +1462,8 @@ total attempts: 3
 connect timeout: configurable
 read timeout: configurable
 ```
+
+Los retries internos de Boto3 son independientes de `OutboxEvent.attempts`. Este último cuenta intentos lógicos del publisher, no cada request interno del SDK.
 
 Las credenciales AWS no se almacenan en el código ni forman parte de la configuración propia de la aplicación. Boto3 utiliza la cadena estándar de proveedores de credenciales y, en AWS, deben preferirse IAM Roles con permisos mínimos.
 
@@ -1339,7 +1475,13 @@ SQS_JOBS_QUEUE_URL=<queue-url>
 AWS_CONNECT_TIMEOUT_SECONDS=2
 AWS_READ_TIMEOUT_SECONDS=5
 AWS_TOTAL_MAX_ATTEMPTS=3
+
+OUTBOX_MAX_PUBLISH_ATTEMPTS=5
+OUTBOX_RETRY_BASE_SECONDS=5
+OUTBOX_RETRY_MAX_SECONDS=300
 ```
+
+Las variables `OUTBOX_*` no son secretos; controlan la política operacional de publicación.
 
 Ejecutar el publisher:
 
@@ -1426,13 +1568,13 @@ uv run alembic upgrade head
 ### Regla del proyecto
 
 ```text
-Cambio en endpoints        -> no requiere migración
-Cambio en services         -> no requiere migración
-Cambio en validaciones     -> normalmente no requiere migración
-Nueva tabla                -> requiere migración
-Nueva columna              -> requiere migración
-Nueva foreign key          -> requiere migración
-Cambio del esquema SQL     -> requiere migración
+Cambio en endpoints        -> no requiere migración
+Cambio en services         -> no requiere migración
+Cambio en validaciones     -> normalmente no requiere migración
+Nueva tabla                -> requiere migración
+Nueva columna              -> requiere migración
+Nueva foreign key          -> requiere migración
+Cambio del esquema SQL     -> requiere migración
 ```
 
 ### Migración de idempotencia de Jobs
@@ -1447,8 +1589,8 @@ Cadena:
 
 ```text
 dd68f1425146
-    |
-    v
+    |
+    v
 e13e045eeb8b
 ```
 
@@ -1469,6 +1611,45 @@ No modifica retrospectivamente `jobs`, `outbox_events`, `api_keys`, `users` ni `
 No se realiza backfill para Jobs históricos. La garantía de idempotencia comienza con los nuevos `POST /api/v1/jobs` posteriores a la incorporación de esta fase.
 
 Una migración aplicada y versionada no se edita retrospectivamente; cualquier ajuste posterior debe realizarse mediante una nueva migración hacia adelante.
+
+### Migración de hardening del Outbox
+
+La FASE 4B incorpora:
+
+```text
+e57aa8870f80_harden_outbox_retries.py
+```
+
+Cadena relevante:
+
+```text
+dd68f1425146
+    |
+    v
+e13e045eeb8b
+    |
+    v
+e57aa8870f80
+```
+
+La migración modifica exclusivamente `outbox_events`:
+
+```text
+ADD available_at
+ADD failed_at
+ADD CHECK not published and failed
+
+DROP ix_outbox_events_unpublished_created_at
+
+CREATE ix_outbox_events_publishable_available_at
+    ON (available_at, created_at, id)
+    WHERE published_at IS NULL
+      AND failed_at IS NULL
+```
+
+`available_at` utiliza `server_default=now()` y `nullable=false`, por lo que los eventos históricos reciben inmediatamente un momento de elegibilidad válido sin necesidad de backfill manual.
+
+La migración no modifica `users`, `tasks`, `api_keys`, `jobs` ni `job_idempotency_keys`.
 
 ---
 
@@ -1505,8 +1686,8 @@ Swagger permite probar directamente los endpoints desde el navegador.
 POST /api/v1/users
 Content-Type: application/json
 {
-  "name": "Ana",
-  "email": "ana@example.com"
+  "name": "Ana",
+  "email": "ana@example.com"
 }
 ```
 
@@ -1514,11 +1695,11 @@ Respuesta aproximada:
 
 ```json
 {
-  "id": 1,
-  "name": "Ana",
-  "email": "ana@example.com",
-  "created_at": "2026-01-01T12:00:00Z",
-  "is_active": true
+  "id": 1,
+  "name": "Ana",
+  "email": "ana@example.com",
+  "created_at": "2026-01-01T12:00:00Z",
+  "is_active": true
 }
 ```
 
@@ -1528,7 +1709,7 @@ Respuesta aproximada:
 PATCH /api/v1/users/1
 Content-Type: application/json
 {
-  "is_active": false
+  "is_active": false
 }
 ```
 
@@ -1540,8 +1721,8 @@ Solo los campos enviados son modificados.
 POST /api/v1/users/1/tasks
 Content-Type: application/json
 {
-  "title": "Aprender relaciones",
-  "description": "Estudiar ForeignKey y relationship"
+  "title": "Aprender relaciones",
+  "description": "Estudiar ForeignKey y relationship"
 }
 ```
 
@@ -1551,7 +1732,7 @@ Content-Type: application/json
 PATCH /api/v1/tasks/1
 Content-Type: application/json
 {
-  "is_completed": true
+  "is_completed": true
 }
 ```
 
@@ -1559,7 +1740,7 @@ También es posible enviar explícitamente `null` en campos opcionales:
 
 ```json
 {
-  "description": null
+  "description": null
 }
 ```
 
@@ -1600,17 +1781,17 @@ Conceptualmente:
 
 ```text
 JSON
- |
- v
+ |
+ v
 TaskUpdate
- |
- v
+ |
+ v
 Service
- |
- v
+ |
+ v
 SQLAlchemy Model
- |
- v
+ |
+ v
 PostgreSQL
 ```
 
@@ -1628,12 +1809,14 @@ La suite combina distintos niveles de testing:
 - Tests de Jobs, contratos de payload y máquina de estados.
 - Tests de idempotencia HTTP y persistente.
 - Tests de Transactional Outbox.
+- Tests de retry, exponential backoff y fallos terminales del Outbox.
+- Tests de poison events y ausencia de head-of-line blocking.
 - Tests de concurrencia utilizando sesiones PostgreSQL independientes.
 - Tests del adapter SQS mediante fakes, sin depender de una cuenta AWS real.
 
 La suite normal no requiere acceso a servicios AWS.
 
-La estructura actual contiene **19 módulos `test_*.py`**, además de `conftest.py`. La FASE 4A añade `tests/test_job_idempotency.py` y amplía `tests/test_jobs.py`, `tests/test_job_service.py` y `tests/test_outbox_publisher.py`.
+La estructura local actual contiene **20 módulos `test_*.py`**, además de `conftest.py`. Entre ellos se encuentran `test_job_payload_contracts.py`, `test_job_idempotency.py`, `test_outbox_model.py`, `test_outbox_publisher.py` y `test_sqs_adapter.py`.
 
 La cobertura de idempotencia verifica, entre otros casos:
 
@@ -1641,17 +1824,35 @@ La cobertura de idempotencia verifica, entre otros casos:
 fingerprint determinista
 fingerprint cambia si cambia el request
 Idempotency-Key obligatoria
-header inválido -> 422
+validación HTTP y validación directa del service
 primer submit -> replayed=false
 misma key + mismo request -> mismo Job
 misma key + request diferente -> 409
 normalización semántica del payload
 namespace por usuario
+ownership defensivo
 una sola fila ante submit concurrente
+same key + requests concurrentes diferentes -> uno crea y otro entra en conflicto
 OpenAPI documenta el header y 409
 ```
 
-El test concurrente utiliza dos `Session` independientes y conexiones reales a PostgreSQL. La protección se valida contra la `UNIQUE(user_id, idempotency_key)`, no mediante mocks.
+La cobertura de Outbox verifica:
+
+```text
+publicación exitosa -> Job queued
+fallo retryable -> available_at futuro
+retry posterior -> publicación exitosa
+exponential backoff con límite
+max attempts -> failed_at
+error permanente -> failed_at inmediato
+published_at y failed_at no pueden coexistir
+poison event no bloquea eventos posteriores
+retry futuro no bloquea eventos listos
+publishers concurrentes no publican dos veces la misma fila
+SQS clasifica errores retryable y permanent
+```
+
+Los tests concurrentes utilizan `Session` independientes y conexiones reales a PostgreSQL. Las garantías de carrera se validan contra constraints y bloqueos reales, no mediante mocks.
 
 ### Base de datos de testing
 
@@ -1688,6 +1889,13 @@ uv run pytest
 ```bash
 uv run pytest tests/test_job_idempotency.py -v
 uv run pytest tests/test_jobs.py -v
+```
+
+### Ejecutar los tests del Outbox
+
+```bash
+uv run pytest tests/test_outbox_model.py tests/test_outbox_publisher.py -v
+uv run pytest tests/test_sqs_adapter.py -v
 ```
 
 ### Ejecutar un archivo concreto
@@ -1750,7 +1958,7 @@ Los archivos generados por Coverage no forman parte del código fuente y están 
 
 ```text
 .coverage
-.coverage.*
+.coverage.\*
 htmlcov/
 ```
 
@@ -1828,12 +2036,12 @@ git diff --check
 El resultado esperado es conceptualmente:
 
 ```text
-Ruff lint          ✅
-Ruff format        ✅
-Tests + coverage   ✅
-Alembic current    ✅
-Alembic heads      ✅
-Git diff check     ✅
+Ruff lint          ✅
+Ruff format        ✅
+Tests + coverage   ✅
+Alembic current    ✅
+Alembic heads      ✅
+Git diff check     ✅
 ```
 
 Este conjunto de comandos define el **contrato de calidad local** del proyecto.
@@ -1901,18 +2109,29 @@ El proyecto aplica actualmente las siguientes prácticas:
 - Prevención de escalamiento de privilegios al delegar scopes.
 - Aislamiento de Jobs por propietario y respuesta uniforme `404 JOB_NOT_FOUND` para recursos inexistentes o ajenos.
 - Respuestas de seguimiento de Jobs con `Cache-Control: no-store`.
-- `Idempotency-Key` obligatoria y validada para creación de Jobs.
+- `Idempotency-Key` obligatoria y validada tanto en FastAPI como en el service.
 - Fingerprint SHA-256 calculado sobre payload validado y normalizado.
 - Namespace idempotente por propietario mediante `(user_id, idempotency_key)`.
+- Verificación defensiva de ownership en replays de idempotencia.
 - Protección de carreras mediante `UNIQUE(user_id, idempotency_key)` en PostgreSQL.
 - `Job`, `OutboxEvent` y registro de idempotencia persistidos atómicamente.
 - Conflictos de reutilización expresados como `409 IDEMPOTENCY_KEY_CONFLICT`.
 - Integración de `Idempotency-Key` y `409` en OpenAPI.
 - Tests concurrentes con sesiones PostgreSQL independientes.
+- `FOR UPDATE SKIP LOCKED` para publishers concurrentes.
+- Selección de Outbox restringida por `available_at`, `published_at` y `failed_at`.
+- Clasificación explícita de errores retryable y permanent del broker.
+- Exponential backoff con límite máximo configurable.
+- Máximo configurable de intentos lógicos de publicación.
+- Aislamiento de poison events mediante `failed_at`.
+- Constraint PostgreSQL que impide `published_at` y `failed_at` simultáneos.
+- Retries futuros y fallos terminales no bloquean eventos sanos posteriores.
 
 `Idempotency-Key` no es una credencial y no sustituye `X-API-Key`. Tampoco se almacena la API Key raw dentro de la tabla de idempotencia.
 
-Todavía faltan mecanismos importantes como rate limiting, observabilidad, expiración/limpieza de Idempotency-Keys y hardening adicional del Outbox.
+`failed_at` del Outbox tampoco sustituye una SQS DLQ: representa un fallo terminal antes de que el evento haya sido aceptado por SQS.
+
+Todavía faltan mecanismos importantes como workers/consumers, idempotencia de consumo, DLQ de procesamiento, rate limiting, observabilidad y expiración/limpieza de Idempotency-Keys.
 
 ---
 
@@ -1922,23 +2141,23 @@ El desarrollo se organiza en bloques funcionales. Después de completar y compro
 
 ```text
 Bloque funcional
-    |
-    v
+    |
+    v
 Ruff lint
-    |
-    v
+    |
+    v
 Ruff format check
-    |
-    v
+    |
+    v
 Tests + coverage
-    |
-    v
+    |
+    v
 Revisar git diff
-    |
-    v
+    |
+    v
 Conventional Commit
-    |
-    v
+    |
+    v
 Push
 ```
 
@@ -1985,16 +2204,16 @@ Los scopes son opcionales y se utilizan cuando ayudan a identificar el área afe
 Los tipos utilizados habitualmente son:
 
 ```text
-feat      nueva funcionalidad o capacidad
-fix       corrección de un bug
-refactor  cambio interno sin modificar el comportamiento esperado
-test      tests o infraestructura de testing
-docs      documentación
-ci        integración continua o pipelines
-perf      mejoras de rendimiento
-chore     mantenimiento general
-build     dependencias, packaging o build
-style     cambios de formato sin alterar lógica
+feat      nueva funcionalidad o capacidad
+fix       corrección de un bug
+refactor  cambio interno sin modificar el comportamiento esperado
+test      tests o infraestructura de testing
+docs      documentación
+ci        integración continua o pipelines
+perf      mejoras de rendimiento
+chore     mantenimiento general
+build     dependencias, packaging o build
+style     cambios de formato sin alterar lógica
 ```
 
 El tipo representa el propósito principal del commit. Los tests y la documentación que acompañan a una nueva funcionalidad no requieren tipos adicionales en el mismo mensaje.
@@ -2127,14 +2346,14 @@ Nunca debe incluirse `.env`.
 - [x] Evento `job.submitted`.
 - [x] `Job` + `OutboxEvent` + `JobIdempotencyKey` en una transacción PostgreSQL.
 - [x] Rollback atómico ante errores.
-- [x] Índice parcial para eventos pendientes.
+- [x] Índice parcial para eventos publicables del Outbox.
 - [x] Versionado inicial de eventos.
 - [x] Message broker port.
 - [x] Message envelope versionado.
 - [x] Outbox publisher.
 - [x] Transición `pending -> queued` tras publicación.
 - [x] Persistencia de errores de publicación.
-- [x] Retry de eventos no publicados.
+- [x] Retry controlado de eventos no publicados.
 - [x] `FOR UPDATE SKIP LOCKED`.
 - [x] Protección ante publishers concurrentes.
 - [x] Semántica at-least-once documentada.
@@ -2146,11 +2365,26 @@ Nunca debe incluirse `.env`.
 - [x] Publisher ejecutable.
 - [x] Tests sin dependencia de AWS.
 - [x] Integración Outbox → SQS.
+- [x] Validación de `Idempotency-Key` también en el service.
+- [x] Defensa de ownership en registros de idempotencia.
+- [x] Test concurrente de misma key con requests diferentes.
+- [x] Clasificación de errores retryable/permanent del broker.
+- [x] `available_at` como momento mínimo de elegibilidad del Outbox.
+- [x] `failed_at` para fallos terminales del Outbox.
+- [x] Exponential backoff configurable.
+- [x] Máximo configurable de intentos de publicación.
+- [x] Fallo permanente inmediato para eventos inválidos.
+- [x] Aislamiento de poison events.
+- [x] Retries futuros sin head-of-line blocking.
+- [x] Publisher continúa después de fallos individuales del lote.
+- [x] Constraint `outbox_events_not_published_and_failed_check`.
+- [x] Índice `ix_outbox_events_publishable_available_at`.
+- [x] Migración `e57aa8870f80_harden_outbox_retries`.
+- [x] Tests de backoff, max attempts, poison events y clasificación SQS.
 - [x] GitHub Actions — implementado.
 
 ### Próximos pasos
 
-- [ ] Hardening del Outbox: errores permanentes, backoff y poison events.
 - [ ] Implementar workers y estrategia de reintentos.
 - [ ] Añadir Dead Letter Queue.
 - [ ] Diseñar idempotencia de consumidores para mensajes duplicados de SQS.
@@ -2178,7 +2412,7 @@ db.get(User, 1)
 representa conceptualmente una operación similar a:
 
 ```sql
-SELECT *
+SELECT \*
 FROM users
 WHERE id = 1;
 ```

@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from threading import Event, Lock
 from typing import Any
 from uuid import uuid4
@@ -13,14 +14,14 @@ from app.adapters.aws.sqs import (
 )
 from app.domain.events import EventType
 from app.domain.jobs import (
-    InvalidJobTransitionError,
     JobStatus,
     JobType,
 )
 from app.models import OutboxEvent, User
 from app.ports.message_broker import (
-    MessageBrokerError,
     MessageEnvelope,
+    PermanentMessageBrokerError,
+    RetryableMessageBrokerError,
 )
 from app.services import jobs as job_service
 from app.services import outbox as outbox_service
@@ -57,9 +58,19 @@ class RecordingMessageBroker:
             if self.failures_remaining > 0:
                 self.failures_remaining -= 1
 
-                raise MessageBrokerError("Broker unavailable")
+                raise RetryableMessageBrokerError("Broker unavailable")
 
             self.messages.append(message)
+
+
+class PermanentFailingMessageBroker:
+    def publish(
+        self,
+        message: MessageEnvelope,
+    ) -> None:
+        del message
+
+        raise PermanentMessageBrokerError("Invalid broker message")
 
 
 class BlockingMessageBroker:
@@ -177,7 +188,7 @@ def test_broker_failure_keeps_job_pending(
         failures_remaining=1,
     )
 
-    with pytest.raises(outbox_service.OutboxPublishError):
+    with pytest.raises(outbox_service.OutboxRetryScheduledError):
         outbox_service.publish_next_outbox_event(
             db_session,
             broker=broker,
@@ -196,6 +207,9 @@ def test_broker_failure_keeps_job_pending(
 
     assert outbox_event.attempts == 1
     assert outbox_event.published_at is None
+    assert outbox_event.failed_at is None
+
+    assert outbox_event.available_at > outbox_event.created_at
 
     assert outbox_event.last_error == ("Broker unavailable")
 
@@ -223,11 +237,21 @@ def test_failed_outbox_event_can_be_retried(
         failures_remaining=1,
     )
 
-    with pytest.raises(outbox_service.OutboxPublishError):
+    with pytest.raises(outbox_service.OutboxRetryScheduledError):
         outbox_service.publish_next_outbox_event(
             db_session,
             broker=broker,
         )
+
+    outbox_event = db_session.scalar(
+        select(OutboxEvent).where(OutboxEvent.aggregate_id == job.id)
+    )
+
+    assert outbox_event is not None
+
+    outbox_event.available_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    db_session.commit()
 
     published = outbox_service.publish_next_outbox_event(
         db_session,
@@ -238,17 +262,13 @@ def test_failed_outbox_event_can_be_retried(
     assert len(broker.messages) == 1
 
     db_session.refresh(job)
+    db_session.refresh(outbox_event)
 
     assert job.status == JobStatus.QUEUED
 
-    outbox_event = db_session.scalar(
-        select(OutboxEvent).where(OutboxEvent.aggregate_id == job.id)
-    )
-
-    assert outbox_event is not None
-
     assert outbox_event.attempts == 2
     assert outbox_event.published_at is not None
+    assert outbox_event.failed_at is None
     assert outbox_event.last_error is None
 
 
@@ -311,12 +331,19 @@ def test_invalid_job_state_is_detected_before_publish(
 
     broker = RecordingMessageBroker()
 
-    with pytest.raises(InvalidJobTransitionError):
+    with pytest.raises(outbox_service.OutboxPermanentFailureError):
         outbox_service.publish_next_outbox_event(
             db_session,
             broker=broker,
         )
 
+    event = db_session.scalar(
+        select(OutboxEvent).where(OutboxEvent.aggregate_id == job.id)
+    )
+
+    assert event is not None
+    assert event.failed_at is not None
+    assert event.published_at is None
     assert broker.messages == []
 
 
@@ -410,3 +437,231 @@ def test_outbox_publisher_can_use_sqs_adapter(
     db_session.refresh(job)
 
     assert job.status == JobStatus.QUEUED
+
+
+@pytest.mark.parametrize(
+    (
+        "attempt",
+        "expected_delay",
+    ),
+    [
+        (1, 5),
+        (2, 10),
+        (3, 20),
+        (4, 40),
+        (7, 300),
+    ],
+)
+def test_outbox_retry_delay_is_exponential_and_capped(
+    attempt: int,
+    expected_delay: int,
+) -> None:
+    delay = outbox_service.calculate_retry_delay_seconds(
+        attempt=attempt,
+        base_seconds=5,
+        max_seconds=300,
+    )
+
+    assert delay == expected_delay
+
+
+def test_retryable_failure_becomes_terminal_after_max_attempts(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    submission = job_service.submit_job(
+        db_session,
+        user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
+        job_type=JobType.GENERATE_REPORT,
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
+    )
+
+    broker = RecordingMessageBroker(
+        failures_remaining=2,
+    )
+
+    with pytest.raises(outbox_service.OutboxRetryScheduledError):
+        outbox_service.publish_next_outbox_event(
+            db_session,
+            broker=broker,
+            max_attempts=2,
+            retry_base_seconds=1,
+            retry_max_seconds=1,
+        )
+
+    event = db_session.scalar(
+        select(OutboxEvent).where(OutboxEvent.aggregate_id == submission.job.id)
+    )
+
+    assert event is not None
+
+    event.available_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    db_session.commit()
+
+    with pytest.raises(outbox_service.OutboxPermanentFailureError):
+        outbox_service.publish_next_outbox_event(
+            db_session,
+            broker=broker,
+            max_attempts=2,
+            retry_base_seconds=1,
+            retry_max_seconds=1,
+        )
+
+    db_session.refresh(event)
+
+    assert event.attempts == 2
+    assert event.failed_at is not None
+    assert event.published_at is None
+
+    result = outbox_service.publish_next_outbox_event(
+        db_session,
+        broker=broker,
+    )
+
+    assert result is False
+
+
+def test_permanent_broker_error_marks_event_failed(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    submission = job_service.submit_job(
+        db_session,
+        user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
+        job_type=JobType.GENERATE_REPORT,
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
+    )
+
+    with pytest.raises(outbox_service.OutboxPermanentFailureError):
+        outbox_service.publish_next_outbox_event(
+            db_session,
+            broker=PermanentFailingMessageBroker(),
+        )
+
+    event = db_session.scalar(
+        select(OutboxEvent).where(OutboxEvent.aggregate_id == submission.job.id)
+    )
+
+    assert event is not None
+    assert event.attempts == 1
+    assert event.failed_at is not None
+    assert event.published_at is None
+
+    assert event.last_error == ("Invalid broker message")
+
+
+def test_poison_event_does_not_block_later_events(
+    db_session: Session,
+) -> None:
+    poison_event = OutboxEvent(
+        event_type="unsupported.event",
+        event_version=1,
+        aggregate_type="unknown",
+        aggregate_id=uuid4(),
+        payload={},
+    )
+
+    db_session.add(poison_event)
+    db_session.commit()
+    db_session.refresh(poison_event)
+
+    user = create_user(db_session)
+
+    submission = job_service.submit_job(
+        db_session,
+        user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
+        job_type=JobType.GENERATE_REPORT,
+        payload={
+            "title": "Test report",
+            "content": "Test report content",
+            "format": "pdf",
+        },
+    )
+
+    broker = RecordingMessageBroker()
+
+    with pytest.raises(outbox_service.OutboxPermanentFailureError):
+        outbox_service.publish_next_outbox_event(
+            db_session,
+            broker=broker,
+        )
+
+    db_session.refresh(poison_event)
+
+    assert poison_event.failed_at is not None
+
+    published = outbox_service.publish_next_outbox_event(
+        db_session,
+        broker=broker,
+    )
+
+    assert published is True
+
+    assert len(broker.messages) == 1
+
+    assert broker.messages[0].aggregate_id == submission.job.id
+
+
+def test_scheduled_retry_does_not_block_ready_event(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    first_submission = job_service.submit_job(
+        db_session,
+        user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
+        job_type=JobType.GENERATE_REPORT,
+        payload={
+            "title": "First report",
+            "content": "First content",
+            "format": "pdf",
+        },
+    )
+
+    second_submission = job_service.submit_job(
+        db_session,
+        user_id=user.id,
+        idempotency_key=f"test-{uuid4().hex}",
+        job_type=JobType.GENERATE_REPORT,
+        payload={
+            "title": "Second report",
+            "content": "Second content",
+            "format": "pdf",
+        },
+    )
+
+    first_event = db_session.scalar(
+        select(OutboxEvent).where(OutboxEvent.aggregate_id == first_submission.job.id)
+    )
+
+    assert first_event is not None
+
+    first_event.available_at = datetime.now(UTC) + timedelta(hours=1)
+
+    db_session.commit()
+
+    broker = RecordingMessageBroker()
+
+    published = outbox_service.publish_next_outbox_event(
+        db_session,
+        broker=broker,
+    )
+
+    assert published is True
+
+    assert broker.messages[0].aggregate_id == second_submission.job.id

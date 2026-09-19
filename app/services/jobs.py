@@ -11,6 +11,7 @@ from app.contracts.jobs import normalize_job_payload
 from app.domain.events import EventType
 from app.domain.idempotency import (
     create_job_submission_fingerprint,
+    validate_idempotency_key,
 )
 from app.domain.jobs import JobStatus, JobType
 from app.models import Job, JobIdempotencyKey, OutboxEvent
@@ -79,8 +80,14 @@ def _resolve_existing_submission(
     db: Session,
     *,
     record: JobIdempotencyKey,
+    user_id: int,
     request_fingerprint: str,
 ) -> JobSubmissionResult:
+    if record.user_id != user_id:
+        raise IdempotencyInvariantError(
+            "El registro de idempotencia pertenece a otro usuario"
+        )
+
     if record.request_fingerprint != request_fingerprint:
         raise IdempotencyKeyConflictError(
             "La Idempotency-Key ya fue utilizada con otra solicitud"
@@ -91,9 +98,9 @@ def _resolve_existing_submission(
         record.job_id,
     )
 
-    if job is None:
+    if job is None or job.user_id != user_id:
         raise IdempotencyInvariantError(
-            "La Idempotency-Key referencia un Job inexistente"
+            "La Idempotency-Key referencia un Job con ownership inválido"
         )
 
     return JobSubmissionResult(
@@ -110,6 +117,8 @@ def submit_job(
     job_type: JobType,
     payload: Mapping[str, Any],
 ) -> JobSubmissionResult:
+    validated_idempotency_key = validate_idempotency_key(idempotency_key)
+
     validated_payload = normalize_job_payload(
         job_type=job_type,
         payload=payload,
@@ -123,13 +132,14 @@ def submit_job(
     existing_record = _get_idempotency_record(
         db,
         user_id=user_id,
-        idempotency_key=idempotency_key,
+        idempotency_key=validated_idempotency_key,
     )
 
     if existing_record is not None:
         return _resolve_existing_submission(
             db,
             record=existing_record,
+            user_id=user_id,
             request_fingerprint=request_fingerprint,
         )
 
@@ -148,7 +158,7 @@ def submit_job(
 
     idempotency_record = JobIdempotencyKey(
         user_id=user_id,
-        idempotency_key=idempotency_key,
+        idempotency_key=validated_idempotency_key,
         request_fingerprint=request_fingerprint,
         job_id=job.id,
     )
@@ -173,7 +183,7 @@ def submit_job(
         existing_record = _get_idempotency_record(
             db,
             user_id=user_id,
-            idempotency_key=idempotency_key,
+            idempotency_key=validated_idempotency_key,
         )
 
         if existing_record is None:
@@ -184,6 +194,7 @@ def submit_job(
         return _resolve_existing_submission(
             db,
             record=existing_record,
+            user_id=user_id,
             request_fingerprint=request_fingerprint,
         )
 

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -40,6 +41,8 @@ def test_outbox_event_can_be_persisted(
     assert event.attempts == 0
     assert event.last_error is None
     assert event.created_at is not None
+    assert event.available_at is not None
+    assert event.failed_at is None
     assert event.published_at is None
 
 
@@ -114,5 +117,28 @@ def test_outbox_event_rejects_blank_types(
         )
         == "23514"
     )
+
+    db_session.rollback()
+
+
+def test_outbox_event_cannot_be_published_and_failed(
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC)
+
+    event = OutboxEvent(
+        event_type="job.submitted",
+        event_version=1,
+        aggregate_type="job",
+        aggregate_id=uuid4(),
+        payload={},
+        published_at=now,
+        failed_at=now,
+    )
+
+    db_session.add(event)
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
 
     db_session.rollback()

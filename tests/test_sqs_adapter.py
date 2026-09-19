@@ -10,12 +10,12 @@ from app.adapters.aws.sqs import (
     MAX_SQS_MESSAGE_BYTES,
     InvalidMessageEnvelopeError,
     SQSMessageBroker,
-    SQSMessageTooLargeError,
     serialize_message_envelope,
 )
 from app.ports.message_broker import (
-    MessageBrokerError,
     MessageEnvelope,
+    PermanentMessageBrokerError,
+    RetryableMessageBrokerError,
 )
 
 
@@ -120,7 +120,7 @@ def test_sqs_error_becomes_message_broker_error() -> None:
         queue_url=("https://example.invalid/test-queue"),
     )
 
-    with pytest.raises(MessageBrokerError) as exc_info:
+    with pytest.raises(RetryableMessageBrokerError) as exc_info:
         broker.publish(create_message())
 
     assert str(exc_info.value) == ("Amazon SQS no pudo aceptar el mensaje")
@@ -141,7 +141,7 @@ def test_sqs_broker_rejects_oversized_message() -> None:
         },
     )
 
-    with pytest.raises(SQSMessageTooLargeError):
+    with pytest.raises(PermanentMessageBrokerError):
         serialize_message_envelope(oversized_message)
 
 

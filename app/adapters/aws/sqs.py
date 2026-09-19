@@ -9,8 +9,9 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.ports.message_broker import (
-    MessageBrokerError,
     MessageEnvelope,
+    PermanentMessageBrokerError,
+    RetryableMessageBrokerError,
 )
 
 MAX_SQS_MESSAGE_BYTES = 1_048_576
@@ -23,11 +24,11 @@ class SQSClient(Protocol):
     ) -> dict[str, Any]: ...
 
 
-class InvalidMessageEnvelopeError(ValueError):
+class InvalidMessageEnvelopeError(PermanentMessageBrokerError):
     pass
 
 
-class SQSMessageTooLargeError(ValueError):
+class SQSMessageTooLargeError(PermanentMessageBrokerError):
     pass
 
 
@@ -103,7 +104,9 @@ class SQSMessageBroker:
             BotoCoreError,
             ClientError,
         ) as exc:
-            raise MessageBrokerError("Amazon SQS no pudo aceptar el mensaje") from exc
+            raise RetryableMessageBrokerError(
+                "Amazon SQS no pudo aceptar el mensaje"
+            ) from exc
 
 
 def create_sqs_message_broker(

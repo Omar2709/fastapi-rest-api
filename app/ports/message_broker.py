@@ -25,6 +25,14 @@ class MessageBrokerError(RuntimeError):
     pass
 
 
+class RetryableMessageBrokerError(MessageBrokerError):
+    pass
+
+
+class PermanentMessageBrokerError(MessageBrokerError):
+    pass
+
+
 class MessageBroker(Protocol):
     def publish(
         self,

@@ -7,7 +7,8 @@ from app.adapters.aws.sqs import (
 from app.config import settings
 from app.database import SessionLocal
 from app.services.outbox import (
-    OutboxPublishError,
+    OutboxPermanentFailureError,
+    OutboxRetryScheduledError,
     publish_next_outbox_event,
 )
 
@@ -66,6 +67,8 @@ def main() -> int:
     )
 
     published_count = 0
+    retry_count = 0
+    failed_count = 0
 
     with SessionLocal() as db:
         for _ in range(args.max_events):
@@ -73,22 +76,47 @@ def main() -> int:
                 published = publish_next_outbox_event(
                     db,
                     broker=broker,
+                    max_attempts=(settings.outbox_max_publish_attempts),
+                    retry_base_seconds=(settings.outbox_retry_base_seconds),
+                    retry_max_seconds=(settings.outbox_retry_max_seconds),
                 )
 
-            except OutboxPublishError as exc:
+            except OutboxRetryScheduledError as exc:
+                retry_count += 1
+
                 print(
-                    f"Error: {exc}",
+                    f"Retry scheduled: {exc}",
                     file=sys.stderr,
                 )
 
-                return 1
+                continue
+
+            except OutboxPermanentFailureError as exc:
+                failed_count += 1
+
+                print(
+                    f"Permanent failure: {exc}",
+                    file=sys.stderr,
+                )
+
+                continue
 
             if not published:
                 break
 
             published_count += 1
 
-    print(f"Outbox publishing completed. Published events: {published_count}")
+    print(
+        "Outbox publishing completed. "
+        f"Published: {published_count}. "
+        f"Retries scheduled: "
+        f"{retry_count}. "
+        f"Permanent failures: "
+        f"{failed_count}."
+    )
+
+    if retry_count > 0 or failed_count > 0:
+        return 1
 
     return 0
 

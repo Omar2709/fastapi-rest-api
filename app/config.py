@@ -42,5 +42,23 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
+    outbox_max_publish_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+    )
+
+    outbox_retry_base_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=3600,
+    )
+
+    outbox_retry_max_seconds: int = Field(
+        default=300,
+        ge=1,
+        le=86400,
+    )
+
 
 settings = Settings()  # pyright: ignore[reportCallIssue]

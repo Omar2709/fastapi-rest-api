@@ -412,10 +412,16 @@ class OutboxEvent(Base):
             "attempts >= 0",
             name="outbox_events_attempts_non_negative_check",
         ),
+        CheckConstraint(
+            ("NOT (published_at IS NOT NULL AND failed_at IS NOT NULL)"),
+            name=("outbox_events_not_published_and_failed_check"),
+        ),
         Index(
-            "ix_outbox_events_unpublished_created_at",
+            ("ix_outbox_events_publishable_available_at"),
+            "available_at",
             "created_at",
-            postgresql_where=text("published_at IS NULL"),
+            "id",
+            postgresql_where=text("published_at IS NULL AND failed_at IS NULL"),
         ),
     )
 
@@ -472,7 +478,18 @@ class OutboxEvent(Base):
         server_default=func.now(),
     )
 
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
     published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    failed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
